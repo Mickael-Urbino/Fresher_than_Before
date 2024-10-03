@@ -1,0 +1,147 @@
+Incrémenter la PWM en step de 1% c'est pas une bonne idée.
+Mieux vaut le faire en augmenter en step le OCompare, ca evite les glitchs et ça permet de fonctionner à n'importe quelle fréquence.
+
+L'augmentation en step de 1% ça fonctionne pour les fréquence inférieures et directement proportionnels à la fréquence du timer. par exemple pour HSI = 16MHz, et aucun prescaler, la fréquence du timer 2 maximale dépend de la résolution du compteur, ici 16 bits.
+
+donc 16MHz/2^16 = 16MHz/65535 = 244Hz. Ici, il n'y pas de virgule etc, donc les pas de 1% sont bien pris en compte. ça fonctionne pour 122Hz et 61Hz, mais pas autre chose.
+
+#define TIM2_CH3_FREQ 20000 //Timer2_CH3 PWM Frequency in Hz (244Hz is Maximum Frequency for 16 bit timer where duty_cycle can span full range 0-99% (100% makes a glitch, avoid.) Considering HSI is 16MHz and prescalers are set to 1) Lower must stay divisible by two to have a proper range displayed.
+#define TIM2_CH3_DUTY_CYCLE 0 //Timer2_CH3 pwm duty cycle in % - If frequency is too low, the counter might not reach the requested value, increase prescaler value in that case.
+
+Il y a un glitch à 100% donc on doit limiter à 99% en plus.
+
+Sans prescaler, la valeur minimal de frequence de PWM est 245Hz. Il faut ajouter un ou plusieurs prescaler pour aller plus bas.
+
+
+Observations poru la generation du timer 2 et le reglage de la periode et du rapoprt cyclique:
+
+//ARR => example 1Hz pwm for the timer period is 62499 tick, which is equals to a 1Hz timer2 frequency for CLK_PRESCALER_HSDIV2/TIM2_PRESCALER = 62500Hz. (The timer counts 62500 times before restarting. At a clock speed of 62500Hz, it makes timer2's period 1 second)
+
+
+Removings custom duty_cycle (in percentage) function, as it creates issue for some frequencies. this was the function:
+uint16_t set_pwm_duty_cycle(uint16_t duty_cycle, uint16_t arr)
+{
+	uint16_t OCR = 0;
+	if (duty_cycle <= 100)
+	{
+		OCR = ((duty_cycle * (arr + 1))/100);
+	}
+	else
+	{
+		OCR = 0; //if duty_cycle value is out of range, it is forcibly set to 0. The pwm won't work
+	}
+	
+	return OCR;	
+}
+
+it was used in tim2 init function:
+
+//uint16_t duty_cycle = set_pwm_duty_cycle(TIM2_CH3_DUTY_CYCLE, arr);
+
+also removed volatile uint16_t duty_cycle_tim2_ch3 = 0; as it was not used anymore for defining duty_cycle
+
+Le timebaseinit doit etre appelé avant le OCxInit !!
+
+
+Removed #define TIM2_CH3_DUTY_CYCLE 0 //Timer2_CH3 pwm duty cycle in % - If frequency is too low, the counter might not reach the requested value, increase prescaler value in that case.
+#define TIM1_CH3_DUTY_CYCLE 0 //Timer1_CH3 pwm duty cycle in %
+
+Because not used
+
+
+Il semblerait que seulement 260 step sont réalisés dans le changeemtn de duty cycle de timer 1 avant d'atteindre la tension max, puis le reste des steps est fait ensuite
+
+Equation de calcul de la frequence counter du timer 1 différente de celle du timer 2.
+Timer 1 : Fck_CNT = Fck_PSC/(PSCR[15:0]+1)
+Timer 2/3/5 : Fck_CNT = Fck_PSC/2^(PSCR[3:0]) 
+
+optimisation espace : supprimer des fonctions non utilisées dans les src files:
+
+void TIM1_OC1Init(TIM1_OCMode_TypeDef TIM1_OCMode,
+                  TIM1_OutputState_TypeDef TIM1_OutputState,
+                  TIM1_OutputNState_TypeDef TIM1_OutputNState,
+                  uint16_t TIM1_Pulse,
+                  TIM1_OCPolarity_TypeDef TIM1_OCPolarity,
+                  TIM1_OCNPolarity_TypeDef TIM1_OCNPolarity,
+                  TIM1_OCIdleState_TypeDef TIM1_OCIdleState,
+                  TIM1_OCNIdleState_TypeDef TIM1_OCNIdleState)
+{
+  /* Check the parameters */
+  assert_param(IS_TIM1_OC_MODE_OK(TIM1_OCMode));
+  assert_param(IS_TIM1_OUTPUT_STATE_OK(TIM1_OutputState));
+  assert_param(IS_TIM1_OUTPUTN_STATE_OK(TIM1_OutputNState));
+  assert_param(IS_TIM1_OC_POLARITY_OK(TIM1_OCPolarity));
+  assert_param(IS_TIM1_OCN_POLARITY_OK(TIM1_OCNPolarity));
+  assert_param(IS_TIM1_OCIDLE_STATE_OK(TIM1_OCIdleState));
+  assert_param(IS_TIM1_OCNIDLE_STATE_OK(TIM1_OCNIdleState));
+  
+  /* Disable the Channel 1: Reset the CCE Bit, Set the Output State , 
+  the Output N State, the Output Polarity & the Output N Polarity*/
+  TIM1->CCER1 &= (uint8_t)(~( TIM1_CCER1_CC1E | TIM1_CCER1_CC1NE 
+                             | TIM1_CCER1_CC1P | TIM1_CCER1_CC1NP));
+  /* Set the Output State & Set the Output N State & Set the Output Polarity &
+  Set the Output N Polarity */
+  TIM1->CCER1 |= (uint8_t)((uint8_t)((uint8_t)(TIM1_OutputState & TIM1_CCER1_CC1E)
+                                     | (uint8_t)(TIM1_OutputNState & TIM1_CCER1_CC1NE))
+                           | (uint8_t)( (uint8_t)(TIM1_OCPolarity  & TIM1_CCER1_CC1P)
+                                       | (uint8_t)(TIM1_OCNPolarity & TIM1_CCER1_CC1NP)));
+  
+  /* Reset the Output Compare Bits & Set the Output Compare Mode */
+  TIM1->CCMR1 = (uint8_t)((uint8_t)(TIM1->CCMR1 & (uint8_t)(~TIM1_CCMR_OCM)) | 
+                          (uint8_t)TIM1_OCMode);
+  
+  /* Reset the Output Idle state & the Output N Idle state bits */
+  TIM1->OISR &= (uint8_t)(~(TIM1_OISR_OIS1 | TIM1_OISR_OIS1N));
+  /* Set the Output Idle state & the Output N Idle state configuration */
+  TIM1->OISR |= (uint8_t)((uint8_t)( TIM1_OCIdleState & TIM1_OISR_OIS1 ) | 
+                          (uint8_t)( TIM1_OCNIdleState & TIM1_OISR_OIS1N ));
+  
+  /* Set the Pulse value */
+  TIM1->CCR1H = (uint8_t)(TIM1_Pulse >> 8);
+  TIM1->CCR1L = (uint8_t)(TIM1_Pulse);
+}
+
+void TIM1_OC2Init(TIM1_OCMode_TypeDef TIM1_OCMode,
+                  TIM1_OutputState_TypeDef TIM1_OutputState,
+                  TIM1_OutputNState_TypeDef TIM1_OutputNState,
+                  uint16_t TIM1_Pulse,
+                  TIM1_OCPolarity_TypeDef TIM1_OCPolarity,
+                  TIM1_OCNPolarity_TypeDef TIM1_OCNPolarity,
+                  TIM1_OCIdleState_TypeDef TIM1_OCIdleState,
+                  TIM1_OCNIdleState_TypeDef TIM1_OCNIdleState)
+{
+  /* Check the parameters */
+  assert_param(IS_TIM1_OC_MODE_OK(TIM1_OCMode));
+  assert_param(IS_TIM1_OUTPUT_STATE_OK(TIM1_OutputState));
+  assert_param(IS_TIM1_OUTPUTN_STATE_OK(TIM1_OutputNState));
+  assert_param(IS_TIM1_OC_POLARITY_OK(TIM1_OCPolarity));
+  assert_param(IS_TIM1_OCN_POLARITY_OK(TIM1_OCNPolarity));
+  assert_param(IS_TIM1_OCIDLE_STATE_OK(TIM1_OCIdleState));
+  assert_param(IS_TIM1_OCNIDLE_STATE_OK(TIM1_OCNIdleState));
+  
+  /* Disable the Channel 1: Reset the CCE Bit, Set the Output State , 
+  the Output N State, the Output Polarity & the Output N Polarity*/
+  TIM1->CCER1 &= (uint8_t)(~( TIM1_CCER1_CC2E | TIM1_CCER1_CC2NE | 
+                             TIM1_CCER1_CC2P | TIM1_CCER1_CC2NP));
+  
+  /* Set the Output State & Set the Output N State & Set the Output Polarity &
+  Set the Output N Polarity */
+  TIM1->CCER1 |= (uint8_t)((uint8_t)((uint8_t)(TIM1_OutputState & TIM1_CCER1_CC2E  ) | 
+                                     (uint8_t)(TIM1_OutputNState & TIM1_CCER1_CC2NE )) | 
+                           (uint8_t)((uint8_t)(TIM1_OCPolarity  & TIM1_CCER1_CC2P  ) | 
+                                     (uint8_t)(TIM1_OCNPolarity & TIM1_CCER1_CC2NP )));
+  
+  /* Reset the Output Compare Bits & Set the Output Compare Mode */
+  TIM1->CCMR2 = (uint8_t)((uint8_t)(TIM1->CCMR2 & (uint8_t)(~TIM1_CCMR_OCM)) | 
+                          (uint8_t)TIM1_OCMode);
+  
+  /* Reset the Output Idle state & the Output N Idle state bits */
+  TIM1->OISR &= (uint8_t)(~(TIM1_OISR_OIS2 | TIM1_OISR_OIS2N));
+  /* Set the Output Idle state & the Output N Idle state configuration */
+  TIM1->OISR |= (uint8_t)((uint8_t)(TIM1_OISR_OIS2 & TIM1_OCIdleState) | 
+                          (uint8_t)(TIM1_OISR_OIS2N & TIM1_OCNIdleState));
+  
+  /* Set the Pulse value */
+  TIM1->CCR2H = (uint8_t)(TIM1_Pulse >> 8);
+  TIM1->CCR2L = (uint8_t)(TIM1_Pulse);
+}
