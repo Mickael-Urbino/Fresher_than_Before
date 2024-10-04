@@ -24,37 +24,73 @@ volatile uint16_t OCR = 0;
 volatile uint16_t arr_tim1 = 0;
 volatile uint16_t arr_tim2 = 0;
 volatile uint8_t press_count = 0;
+volatile uint16_t duty_cycle_step = 0;
 
 void clock_setup(void);
 void gpio_setup(void);
+void EXTI_setup(void);
 void tim4_init(void);
 void delay_ms(int delay);
 
 uint16_t set_pwm_frequency(uint8_t timer, uint16_t frequency, uint8_t hsi_prescaler, uint8_t timx_prescaler); //set PWM Frequency in Hz
-//uint16_t set_pwm_frequency_adv_timer(uint16_t frequency, uint8_t hsi_prescaler, uint8_t timx_prescaler); //set PWM Frequency in Hz for advanced timer (timer1)
 
 uint16_t tim2_init(void);
 uint16_t tim1_init(void);
 
 void led_smooth_blink(void);
 void pump_smooth_on_off(void);
-/*void pump_max_speed(void);
-void pump_low_speed(void);
-void pump_off(void);
-*/
+uint16_t pump_max_speed(uint16_t duty_cycle_step);
+uint16_t pump_low_speed(uint16_t duty_cycle_step);
+void pump_off(uint16_t duty_cycle_step);
+
+
+typedef enum {
+		STATE_SLEEP,
+    STATE_IDLE,
+    STATE_FULL_SPEED,
+    STATE_LOW_SPEED,
+		STATE_PULSE
+
+} state;
+
+
+state current_state = STATE_SLEEP;
+
 
 INTERRUPT_HANDLER(TIM4_UPD_OVF_IRQHandler,23) {
     ms_count++; 
     TIM4_ClearITPendingBit(TIM4_IT_UPDATE);
 }
 
+INTERRUPT_HANDLER(EXTI_PORTD_IRQHandler, 6) {
+	
+	delay_ms(50);
+
+	if (GPIO_ReadInputPin(GPIOD, GPIO_PIN_6) == 0)
+	{
+		 press_count++;
+	}
+}
+
 
 main()
 {
 	clock_setup();
-	gpio_setup();	
-	enableInterrupts();	
+	EXTI_setup();
+	
+	enableInterrupts();
+	
+/*	Init Timer 4 before setting up GPIO's so We can initiate a 5 seconds delay.
+			It lets the SWIM pin programmable for at least, before turning the pin into
+			a GPIO.
+			It is a mandatory feature if we want to be able to reprogram the device.
+			Otherwise, we won't be able to program it anymore as the pin will now be a GPIO.
+*/
 	tim4_init();
+	delay_ms(5000);
+	
+	gpio_setup();	
+		
 	arr_tim1 = tim1_init();	
 	arr_tim2 = tim2_init();	
 	
@@ -62,23 +98,67 @@ main()
 	while (1)
 	
 	{
-		//GPIO_WriteReverse(GPIOA, GPIO_PIN_3);
-				
-		if (GPIO_ReadInputPin(GPIOA, GPIO_PIN_1) == 0)
-		{
-			led_smooth_blink();
-			delay_ms(10);
-			pump_smooth_on_off();
+		switch (current_state)
+		{				
+			case STATE_SLEEP:
 			
+				led_smooth_blink();
+				pump_off(duty_cycle_step);
+				
+				if (press_count > 0)
+				{
+					current_state = STATE_IDLE;
+					
+				}
+				break;
+				
+			case STATE_IDLE:
+			
+				TIM2_SetCompare3(arr_tim2/100);
+				pump_off(duty_cycle_step);
+				
+				if (press_count > 1)
+				{
+					current_state = STATE_FULL_SPEED;
+					
+				}
+				break;
+				
+			case STATE_FULL_SPEED:
+			
+				TIM2_SetCompare3(arr_tim2);
+				pump_max_speed(duty_cycle_step);
+				
+				if (press_count > 2)
+				{
+					current_state = STATE_LOW_SPEED;
+					
+				}
+				break;
+				
+			case STATE_LOW_SPEED:
+			
+				TIM2_SetCompare3(arr_tim2/2);
+				pump_low_speed(duty_cycle_step);
+				
+				if (press_count > 3)
+				{
+					current_state = STATE_PULSE;			
+				}
+				break;
+				
+			case STATE_PULSE:
+				TIM2_SetCompare3(arr_tim2/2);
+				pump_smooth_on_off();
+				TIM2_SetCompare3(0);
+				delay_ms(500);
+				if (press_count > 4)
+				{
+					current_state = STATE_SLEEP;
+					press_count = 0;
+				}
+				break;
 		}
-		else
-		{
-			TIM2_SetCompare3(0);
-			TIM1_SetCompare3(0);
-			//TIM1_SetCompare3(0);
-			//GPIO_WriteLow(GPIOC, GPIO_PIN_3);
-		}
-		
 	}
 }
 
@@ -111,16 +191,28 @@ void clock_setup(void)
 	
 }
 
+
 void gpio_setup(void)
 {
-	GPIO_DeInit(GPIOB); //Prepare Port B for operation
 	GPIO_DeInit(GPIOA); //Prepare Port A for operation
-	GPIO_DeInit(GPIOC); //Prepare Port C for operation
+	GPIO_DeInit(GPIOB); //Prepare Port B for operation	
+	GPIO_DeInit(GPIOD); //Prepare Port D for operation
 	
-	//GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_OD_HIZ_SLOW);
-	//GPIO_Init(GPIOA, GPIO_PIN_3, GPIO_MODE_OUT_PP_LOW_SLOW);
-	GPIO_Init(GPIOA, GPIO_PIN_1, GPIO_MODE_IN_FL_NO_IT);
-	//GPIO_Init(GPIOC, GPIO_PIN_3, GPIO_MODE_OUT_PP_LOW_SLOW);
+	GPIO_Init(GPIOD, GPIO_PIN_6, GPIO_MODE_IN_FL_IT);
+	GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_PP_LOW_FAST);
+}
+
+void EXTI_setup(void)
+{
+	ITC_DeInit();
+	ITC_SetSoftwarePriority(ITC_IRQ_PORTD, ITC_PRIORITYLEVEL_0);
+	
+	EXTI_DeInit();
+	//Enable PORTD interrupt on falling edges
+	EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOD, EXTI_SENSITIVITY_FALL_ONLY);
+	EXTI_SetTLISensitivity(EXTI_TLISENSITIVITY_FALL_ONLY);
+	
+	enableInterrupts();
 }
 
 void tim4_init(void) //Timer Used to count milliseconds for delay function
@@ -219,7 +311,7 @@ uint16_t tim1_init(void)
 void led_smooth_blink(void)
 {
 	
-	uint32_t duty_cycle_step = 0;
+	uint16_t duty_cycle_step = 0;
 	//Test progressive blink//
 	while (duty_cycle_step <= arr_tim2)
 	{		
@@ -240,7 +332,7 @@ void led_smooth_blink(void)
 void pump_smooth_on_off(void)
 {
 	
-	uint32_t duty_cycle_step = 0;
+	uint16_t duty_cycle_step = 0;
 	//Test 0 to max to 0 for pump//
 	while (duty_cycle_step <= arr_tim1)
 	{		
@@ -258,17 +350,35 @@ void pump_smooth_on_off(void)
 		
 }
 
-/*void pump_max_speed(void)
+uint16_t pump_max_speed(uint16_t duty_cycle_step)
 {
-	TIM1_SetCompare3(arr_tim1);
+	//Test 0 to max for pump//
+	while (duty_cycle_step <= arr_tim1)
+	{		
+		delay_ms(1);
+		TIM1_SetCompare3(duty_cycle_step);
+		duty_cycle_step++;			
+	}
+	return duty_cycle_step;
 }
 
-void pump_low_speed(void)
+uint16_t pump_low_speed(uint16_t duty_cycle_step)
 {
-	TIM1_SetCompare3((arr_tim1*2)/3);
+	while (duty_cycle_step != (arr_tim1/2))
+	{		
+		delay_ms(1);
+		TIM1_SetCompare3(duty_cycle_step);
+		duty_cycle_step--;
+	}
+	return duty_cycle_step;
 }
 
-void pump_off(void)
+void pump_off(uint16_t duty_cycle_step)
 {
-	TIM1_SetCompare3(0);
-}*/
+	while (duty_cycle_step)
+	{		
+		delay_ms(1);
+		TIM1_SetCompare3(duty_cycle_step);
+		duty_cycle_step--;
+	}
+}
