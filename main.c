@@ -23,11 +23,15 @@ volatile int ms_count = 0; //Declared for delay_ms function purposes
 volatile uint16_t OCR = 0;
 volatile uint16_t arr_tim1 = 0;
 volatile uint16_t arr_tim2 = 0;
+volatile uint16_t max_pwm_speed_pump = 0;	
+volatile uint16_t max_pwm_speed_LED = 0;
 volatile uint8_t press_count = 0;
 volatile uint16_t duty_cycle_step = 0;
+volatile bool pulse_flag = FALSE;
 
 void clock_setup(void);
 void gpio_setup(void);
+void gpio_setup_SWIM(void);
 void EXTI_setup(void);
 void tim4_init(void);
 void delay_ms(int delay);
@@ -39,10 +43,17 @@ uint16_t tim1_init(void);
 
 void led_smooth_blink(void);
 void pump_smooth_on_off(void);
-uint16_t pump_max_speed(uint16_t duty_cycle_step);
-uint16_t pump_low_speed(uint16_t duty_cycle_step);
-void pump_off(uint16_t duty_cycle_step);
 
+/** Setting Pump Speed Function */
+
+void set_pump_speed(uint16_t duty_cycle_step);
+
+uint16_t accelerate_pump(uint16_t duty_cycle_step);
+uint16_t decelerate_pump(uint16_t duty_cycle_step);
+
+void pump_off(void);
+
+/* ///////////////////////////////////////////////// */
 
 typedef enum {
 		STATE_SLEEP,
@@ -89,10 +100,12 @@ main()
 	tim4_init();
 	delay_ms(5000);
 	
-	gpio_setup();	
+	/*Init GPIOs (Pin D6 for press_button) */
+	gpio_setup();
+	
+	/** Init Timers and store their ARR to have a reference value for duty_cycle calculation*/
+	max_pwm_speed_pump = tim1_init();	
 		
-	arr_tim1 = tim1_init();	
-	arr_tim2 = tim2_init();	
 	
 		
 	while (1)
@@ -100,34 +113,44 @@ main()
 	{
 		switch (current_state)
 		{				
-			case STATE_SLEEP:
-			
-				led_smooth_blink();
-				pump_off(duty_cycle_step);
+			case STATE_SLEEP: //Default State, no consumption, waiting for a button press to wake up.
+
+				pump_off();
 				
 				if (press_count > 0)
 				{
 					current_state = STATE_IDLE;
-					
+					max_pwm_speed_LED = tim2_init();
 				}
 				break;
 				
 			case STATE_IDLE:
 			
-				TIM2_SetCompare3(arr_tim2/100);
-				pump_off(duty_cycle_step);
+				TIM2_SetCompare3(max_pwm_speed_LED/100);
+				TIM2_SetCompare2(max_pwm_speed_LED/100);
+				
+				pump_off();
 				
 				if (press_count > 1)
 				{
 					current_state = STATE_FULL_SPEED;
+					TIM2_SetCompare2(0);
 					
 				}
 				break;
 				
 			case STATE_FULL_SPEED:
 			
-				TIM2_SetCompare3(arr_tim2);
-				pump_max_speed(duty_cycle_step);
+				TIM2_SetCompare3(max_pwm_speed_LED);
+				
+				if (duty_cycle_step < max_pwm_speed_pump)
+				{
+					accelerate_pump(duty_cycle_step);
+				}
+				else
+				{
+					set_pump_speed(max_pwm_speed_pump);
+				}
 				
 				if (press_count > 2)
 				{
@@ -138,24 +161,41 @@ main()
 				
 			case STATE_LOW_SPEED:
 			
-				TIM2_SetCompare3(arr_tim2/2);
-				pump_low_speed(duty_cycle_step);
+				TIM2_SetCompare3(max_pwm_speed_LED/2);
+				
+				if (duty_cycle_step > 0)
+				{
+					decelerate_pump(duty_cycle_step);
+				}
+				else
+				{
+					set_pump_speed(0);
+				}
+				
+				if (press_count > 2)
+				{
+					current_state = STATE_LOW_SPEED;
+					
+				}
 				
 				if (press_count > 3)
 				{
-					current_state = STATE_PULSE;			
+					current_state = STATE_PULSE;
+					TIM2_SetCompare3(0);					
 				}
 				break;
 				
 			case STATE_PULSE:
-				TIM2_SetCompare3(arr_tim2/2);
+				TIM2_SetCompare2(max_pwm_speed_LED/2);
 				pump_smooth_on_off();
-				TIM2_SetCompare3(0);
-				delay_ms(500);
+				
 				if (press_count > 4)
 				{
 					current_state = STATE_SLEEP;
+					pump_off();
 					press_count = 0;
+					TIM2_SetCompare2(0);					
+					TIM2_DeInit();
 				}
 				break;
 		}
@@ -200,6 +240,14 @@ void gpio_setup(void)
 	
 	GPIO_Init(GPIOD, GPIO_PIN_6, GPIO_MODE_IN_FL_IT);
 	GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_PP_LOW_FAST);
+}
+
+void gpio_setup_SWIM(void)
+{
+	//GPIO_DeInit(GPIOD); //Prepare Port D for operation
+	
+	GPIO_Init(GPIOD, GPIO_PIN_1, GPIO_MODE_OUT_PP_LOW_FAST);
+
 }
 
 void EXTI_setup(void)
@@ -288,6 +336,7 @@ uint16_t tim2_init(void)
 	TIM2_DeInit(); //DeInit TIM2
 	TIM2_TimeBaseInit(TIM2_PRESCALER_1, ARR); //Set TIM2 Prescaler and period (in number of ticks) Note: ARRmax = 65535 (Adjust prescaler to get the correct pwm frequency)
 	TIM2_OC3Init(TIM2_OCMODE_PWM1, TIM2_OUTPUTSTATE_ENABLE, OCR, TIM2_OCPOLARITY_HIGH); // Init PWM Output Compare, High when Counter < DutyCycle (OCR), Low afterwards.
+	TIM2_OC2Init(TIM2_OCMODE_PWM1, TIM2_OUTPUTSTATE_ENABLE, OCR, TIM2_OCPOLARITY_HIGH); // Init PWM Output Compare, High when Counter < DutyCycle (OCR), Low afterwards.
 	TIM2_Cmd(ENABLE);
 	
 	return ARR;
@@ -331,6 +380,58 @@ void led_smooth_blink(void)
 
 void pump_smooth_on_off(void)
 {
+	if ((duty_cycle_step < arr_tim1) && (!pulse_flag))
+	{		
+		accelerate_pump(duty_cycle_step);			
+	}
+	else
+	{
+		pulse_flag = TRUE;
+	}
+	
+	if ((duty_cycle_step > 0) && (pulse_flag))
+	{		
+		decelerate_pump(duty_cycle_step);			
+	}
+	else
+	{
+		pulse_flag = FALSE;
+	}
+		
+}
+
+uint16_t accelerate_pump(uint16_t duty_cycle_step)
+{	
+	delay_ms(1);
+	TIM1_SetCompare3(duty_cycle_step);
+	duty_cycle_step++;			
+
+	return duty_cycle_step;
+}
+
+uint16_t decelerate_pump(uint16_t duty_cycle_step)
+{	
+	delay_ms(1);
+	TIM1_SetCompare3(duty_cycle_step);
+	duty_cycle_step--;			
+
+	return duty_cycle_step;
+}
+
+void set_pump_speed(uint16_t duty_cycle_step)
+{	
+	TIM1_SetCompare3(duty_cycle_step);
+
+}
+
+void pump_off(void)
+{
+	TIM1_SetCompare3(0);
+}
+
+/*
+void pump_smooth_on_off2(void)
+{
 	
 	uint16_t duty_cycle_step = 0;
 	//Test 0 to max to 0 for pump//
@@ -348,37 +449,4 @@ void pump_smooth_on_off(void)
 		duty_cycle_step--;
 	}
 		
-}
-
-uint16_t pump_max_speed(uint16_t duty_cycle_step)
-{
-	//Test 0 to max for pump//
-	while (duty_cycle_step <= arr_tim1)
-	{		
-		delay_ms(1);
-		TIM1_SetCompare3(duty_cycle_step);
-		duty_cycle_step++;			
-	}
-	return duty_cycle_step;
-}
-
-uint16_t pump_low_speed(uint16_t duty_cycle_step)
-{
-	while (duty_cycle_step != (arr_tim1/2))
-	{		
-		delay_ms(1);
-		TIM1_SetCompare3(duty_cycle_step);
-		duty_cycle_step--;
-	}
-	return duty_cycle_step;
-}
-
-void pump_off(uint16_t duty_cycle_step)
-{
-	while (duty_cycle_step)
-	{		
-		delay_ms(1);
-		TIM1_SetCompare3(duty_cycle_step);
-		duty_cycle_step--;
-	}
-}
+}*/

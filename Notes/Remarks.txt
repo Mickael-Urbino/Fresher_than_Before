@@ -1,3 +1,4 @@
+Implemnter une deuxiemefonction dedelai, non blocante. La premièredoit rester pour l'histoire de la pin SWIM
 Priority levels to be investigated for interrupts. This is what prevented my code from workin properly
 
 Incrémenter la PWM en step de 1% c'est pas une bonne idée.
