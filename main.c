@@ -23,6 +23,8 @@
  * ----------------------------------------------------------------------------
  */
  
+#define VERSION "Draft"
+ 
 #include "stm8s.h"       // Include the STM8S standard library for hardware definitions
 #include "stm8s_it.h"    // Include interrupt service routine headers
 #include "math.h"        // Include math library for mathematical operations
@@ -71,7 +73,7 @@ uint16_t pump_smooth_on_off(uint16_t duty_cycle_step); // Function for smooth pu
 uint16_t set_pump_speed(uint16_t duty_cycle_step);    // Sets the speed of the pump based on duty cycle
 uint16_t accelerate_pump(uint16_t duty_cycle_step);   // Gradually increases the pump speed
 uint16_t decelerate_pump(uint16_t duty_cycle_step);   // Gradually decreases the pump speed
-void pump_off(uint16_t duty_cycle_step);               // Turns off the pump
+uint16_t pump_off(uint16_t duty_cycle_step);               // Turns off the pump
 
 
 // ===================== State Definitions =====================
@@ -152,9 +154,11 @@ main()
 		switch (current_state)
 		{				
 			case STATE_SLEEP: // Default state: minimal power consumption, awaiting wake-up
-
-				pump_off(duty_cycle_step);	// Ensure the pump is off in sleep state
 				
+				if (duty_cycle_step != 0)
+				{
+					duty_cycle_step = pump_off(duty_cycle_step);	// Ensure the pump is off in sleep state
+				}
 				// Transition to IDLE state if a button press is detected
 				if (press_count > 0)
 				{
@@ -170,13 +174,39 @@ main()
 				
 				pump_off(duty_cycle_step);	// Keep the pump turned off
 				
-				// Transition to FULL_SPEED state on second button press
+				// Transition to LOW_SPEED state on second button press
 				if (press_count > 1)
 				{
-					current_state = STATE_FULL_SPEED;
+					current_state = STATE_LOW_SPEED;
 					// Turn off Pulse LED
 					TIM2_SetCompare2(0);
 					
+				}
+				break;
+				
+			case STATE_LOW_SPEED:	// Reduced pump speed with moderate LED brightness
+				
+				// Set LED brightness to 50% of maximum
+				TIM2_SetCompare3(max_pwm_speed_LED/2);
+				
+				// Gradually decrease pump speed to 2/3 of its maximum speed
+				if (duty_cycle_step > (max_pwm_speed_pump/3)*2)
+				{
+					duty_cycle_step = decelerate_pump(duty_cycle_step);
+				}
+				else if (duty_cycle_step < (max_pwm_speed_pump/3)*2)
+				{
+					duty_cycle_step = accelerate_pump(duty_cycle_step);
+				}
+				else
+				{
+					duty_cycle_step = set_pump_speed((max_pwm_speed_pump/3)*2);	// Maintain 2/3 speed
+				}
+				
+				// Transition to FULL_SPEED state on third button press
+				if (press_count > 2)
+				{
+					current_state = STATE_FULL_SPEED;
 				}
 				break;
 				
@@ -195,37 +225,15 @@ main()
 					duty_cycle_step = set_pump_speed(max_pwm_speed_pump);	// Maintain max speed
 				}
 				
-				// Transition to LOW_SPEED state on third button press
-				if (press_count > 2)
-				{
-					current_state = STATE_LOW_SPEED;
-					
-				}
-				break;
-				
-			case STATE_LOW_SPEED:	// Reduced pump speed with moderate LED brightness
-				
-				// Set LED brightness to 50% of maximum
-				TIM2_SetCompare3(max_pwm_speed_LED/2);
-				
-				// Gradually decrease pump speed to 2/3 of its maximum speed
-				if (duty_cycle_step > (max_pwm_speed_pump/3)*2)
-				{
-					duty_cycle_step = decelerate_pump(duty_cycle_step);
-				}
-				else
-				{
-					duty_cycle_step = set_pump_speed((max_pwm_speed_pump/3)*2);	// Maintain 2/3 speed
-				}
-				
 				// Transition to PULSE state on fourth button press
 				if (press_count > 3)
 				{
 					current_state = STATE_PULSE;
 					TIM2_SetCompare3(0);	// Turn off the STRONG/WEAK LEDs					
+					
 				}
 				break;
-				
+
 			case STATE_PULSE:	// Pulsed pump operation with LED indication
 			
 				// Set LED PULSE to 50% brightnes
@@ -237,10 +245,12 @@ main()
 				// Transition back to SLEEP state on fifth button press
 				if (press_count > 4)
 				{
+					
+					
 					current_state = STATE_SLEEP;	// Reset to SLEEP state
 					
 					// Turn off the pump and reset press count
-					pump_off(duty_cycle_step);
+					duty_cycle_step = pump_off(duty_cycle_step);
 					press_count = 0;
 					
 					
@@ -252,7 +262,14 @@ main()
 			default:
 			
 				// Unexpected state: reset to SLEEP state as a failsafe
-				current_state = STATE_SLEEP;
+				current_state = STATE_SLEEP;	// Reset to SLEEP state
+					
+				// Turn off the pump and reset press count
+				duty_cycle_step = pump_off(duty_cycle_step);
+				press_count = 0;
+				
+				TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
+				
 				break;
 		}
 	}
@@ -560,7 +577,7 @@ uint16_t set_pump_speed(uint16_t duty_cycle_step)
  * @param duty_cycle_step The current duty cycle of the pump's PWM control.
  */
  
-void pump_off(uint16_t duty_cycle_step)
+uint16_t pump_off(uint16_t duty_cycle_step)
 {
 	if (duty_cycle_step > 0)
 	{
@@ -572,6 +589,8 @@ void pump_off(uint16_t duty_cycle_step)
 		// Completely turn off the PWM signal once the duty cycle reaches zero
 		TIM1_SetCompare3(0);
 	}
+	
+	return duty_cycle_step;
 }
 
 /**
