@@ -197,12 +197,13 @@ main()
 				{
 					duty_cycle_step = pump_off(duty_cycle_step);	// Ensure the pump is off in sleep state
 				}
-				// Transition to IDLE state if a button press is detected
-				if (press_count > 0)
-				{
+				
+				halt(); // Wait for push-button interrupt
+				
+				// Transition to IDLE state after exiting SLEEP state when a button press is detected
 					current_state = STATE_IDLE;
 					max_pwm_speed_LED = tim2_init();	// Initialize Timer 2 for LED PWM control during IDLE state (SWIM is disabled)
-				}
+					
 				break;
 				
 			case STATE_IDLE:	// Idle state: low LED brightness and pump off
@@ -425,7 +426,7 @@ void gpio_setup(void)
 	GPIO_DeInit(GPIOB);  // Reset Port B configuration
 	GPIO_DeInit(GPIOD);  // Reset Port D configuration
 	
-	GPIO_Init(GPIOD, GPIO_PIN_6, GPIO_MODE_IN_FL_IT);					// Configure Pin D6 as an floating input with interrupt
+	GPIO_Init(GPIOD, GPIO_PIN_6, GPIO_MODE_IN_PU_IT);					// Configure Pin D6 as an floating input with interrupt
 	GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_PP_LOW_FAST);	// Configure Pin B4 as push-pull output with fast response
 }
 
