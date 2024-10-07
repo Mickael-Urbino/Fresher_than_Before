@@ -193,7 +193,7 @@ main()
 		{				
 			case STATE_SLEEP: // Default state: minimal power consumption, awaiting wake-up
 				
-				if (duty_cycle_step != 0)
+				while (duty_cycle_step != 0)
 				{
 					duty_cycle_step = pump_off(duty_cycle_step);	// Ensure the pump is off in sleep state
 				}
@@ -211,7 +211,7 @@ main()
 				TIM2_SetCompare3(max_pwm_speed_LED/100);
 				TIM2_SetCompare2(max_pwm_speed_LED/100);
 				
-				pump_off(duty_cycle_step);	// Keep the pump turned off
+				duty_cycle_step = pump_off(duty_cycle_step);	// Keep the pump turned off
 				
 				// Transition to LOW_SPEED state on second button press
 				if (press_count > 1)
