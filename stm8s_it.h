@@ -32,7 +32,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm8s.h"
 
-extern volatile int ms_count;
+extern volatile uint16_t ms_count;
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/

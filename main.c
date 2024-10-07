@@ -42,16 +42,24 @@
 #define TIMER_2 2           // Timer identifier for Timer 2
 #define TIMER_4 4           // Timer identifier for Timer 4
 
+#define LONG_PRESS_DURATION 1500 //Long button press threshold in ms
+#define DEBOUNCE_DELAY 50 // Debounce delay in ms
+
 // ===================== Global Variables =====================
-volatile int ms_count = 0;          // Milliseconds counter for timing functions
+volatile uint16_t ms_count = 0;      // Milliseconds counter for timing functions
 volatile uint16_t OCR = 0;          // Output Compare Register for PWM settings
 volatile uint16_t arr_tim1 = 0;     // Auto-Reload Register for Timer 1
 volatile uint16_t arr_tim2 = 0;     // Auto-Reload Register for Timer 2
 volatile uint16_t max_pwm_speed_pump = 0; // Maximum PWM speed for the pump
 volatile uint16_t max_pwm_speed_LED = 0;  // Maximum PWM speed for the LED
-volatile uint8_t press_count = 0;   // Button press counter
-volatile uint16_t duty_cycle_step = 0; // Current duty cycle step for PWM
-volatile bool pulse_flag = 0;       // Flag indicating pulse operation statu
+volatile uint8_t press_count = 0;   		// Button press counter
+volatile bool long_press = 0;			// Flag indicating a long button press
+volatile bool button_pressed = 0; // Flag indicating a button press
+volatile uint16_t button_press_start = 0;	// Start time of button press
+volatile uint16_t button_press_duration = 0; // Total time of button press
+volatile uint16_t duty_cycle_step = 0;	// Current duty cycle step for PWM
+volatile bool pulse_flag = 0;       // Flag indicating pulse operation status
+volatile uint16_t last_interrupt_time = 0;
 
 
 // ===================== Function Prototypes =====================
@@ -60,7 +68,7 @@ void gpio_setup(void);                                 // Configures GPIO pins f
 void gpio_setup_SWIM(void);                            // Configures GPIO for SWIM functionality
 void EXTI_setup(void);                                 // Configures external interrupts for button detection
 void tim4_init(void);                                  // Initializes Timer 4 for delay management
-void delay_ms(int delay);                              // Generates a delay in milliseconds
+void delay_ms(uint16_t delay);                         // Generates a delay in milliseconds
 
 uint16_t set_pwm_frequency(uint8_t timer, uint16_t frequency, uint8_t hsi_prescaler, uint8_t timx_prescaler); // Sets PWM Frequency in Hz
 
@@ -108,12 +116,42 @@ INTERRUPT_HANDLER(TIM4_UPD_OVF_IRQHandler, 23) {
  * to avoid false triggers due to noise.
  */
 INTERRUPT_HANDLER(EXTI_PORTD_IRQHandler, 6) {
-	delay_ms(50); // Debounce delay to ensure stable button press detection
+	uint16_t current_time = ms_count; // Get current time
 
+	// Debounce management
+	if (current_time - last_interrupt_time < DEBOUNCE_DELAY) {
+			return; // Return if debounce delay is not elapsed
+	}
+	last_interrupt_time = current_time; // Update last interrupt
+	
+	
 	if (GPIO_ReadInputPin(GPIOD, GPIO_PIN_6) == 0) // Check if the button is pressed
 	{
-		press_count++; // Increment press count if the button is pressed
+		// Check if the button was pressed before, raise the flag if not, and start counting press duration
+		if (!button_pressed)
+		{
+			button_pressed = 1;
+			button_press_start = ms_count;
+		}
 	}
+	else if (GPIO_ReadInputPin(GPIOD, GPIO_PIN_6) != 0)// When button is released, compute the duration of the press 
+	{
+		if (button_pressed) // Check if we reach this step with a proper button press, and not some noise event.
+		{
+			button_press_duration = ms_count - button_press_start; // Calculate the duration of the press.
+		
+			if (button_press_duration < LONG_PRESS_DURATION) // Short press detected
+			{
+				press_count++;
+			}
+			else // Long press detected
+			{
+				long_press = 1;
+			}
+			button_pressed = 0; //Release button press flag
+		}
+	}
+	
 }
 
 
@@ -180,14 +218,31 @@ main()
 					current_state = STATE_LOW_SPEED;
 					// Turn off Pulse LED
 					TIM2_SetCompare2(0);
-					
 				}
+				
+				// Transition to SLEEP state on long button press
+				if (long_press != 0)
+				{
+					current_state = STATE_SLEEP;
+					
+					// Turn off the pump and reset press count
+					duty_cycle_step = pump_off(duty_cycle_step);					
+					press_count = 0;
+					long_press = 0;
+					
+					// Turn off leds
+					TIM2_SetCompare2(0);
+					TIM2_SetCompare3(0);
+
+					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
+				}
+				
 				break;
 				
 			case STATE_LOW_SPEED:	// Reduced pump speed with moderate LED brightness
 				
-				// Set LED brightness to 50% of maximum
-				TIM2_SetCompare3(max_pwm_speed_LED/2);
+				// Set LED brightness to 1% of maximum
+				TIM2_SetCompare3(max_pwm_speed_LED/100);
 				
 				// Gradually decrease pump speed to 2/3 of its maximum speed
 				if (duty_cycle_step > (max_pwm_speed_pump/3)*2)
@@ -208,12 +263,29 @@ main()
 				{
 					current_state = STATE_FULL_SPEED;
 				}
+				
+				// Transition to SLEEP state on long button press
+				if (long_press != 0)
+				{
+					current_state = STATE_SLEEP;
+					
+					// Turn off the pump and reset press count
+					duty_cycle_step = pump_off(duty_cycle_step);					
+					press_count = 0;
+					long_press = 0;
+					
+					// Turn off leds
+					TIM2_SetCompare2(0);
+					TIM2_SetCompare3(0);
+
+					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
+				}
 				break;
 				
 			case STATE_FULL_SPEED:	// Full pump speed and LED brightness
 				
 				// Set LED to maximum brightness
-				TIM2_SetCompare3(max_pwm_speed_LED);
+				TIM2_SetCompare3(max_pwm_speed_LED/100);
 				
 				// Gradually increase pump speed to maximum
 				if (duty_cycle_step < max_pwm_speed_pump)
@@ -230,31 +302,60 @@ main()
 				{
 					current_state = STATE_PULSE;
 					TIM2_SetCompare3(0);	// Turn off the STRONG/WEAK LEDs					
+				}
+				
+				// Transition to SLEEP state on long button press
+				if (long_press != 0)
+				{
+					current_state = STATE_SLEEP;
 					
+					// Turn off the pump and reset press count
+					duty_cycle_step = pump_off(duty_cycle_step);					
+					press_count = 0;
+					long_press = 0;
+					
+					// Turn off leds
+					TIM2_SetCompare2(0);
+					TIM2_SetCompare3(0);
+
+					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
 				}
 				break;
 
 			case STATE_PULSE:	// Pulsed pump operation with LED indication
 			
-				// Set LED PULSE to 50% brightnes
-				TIM2_SetCompare2(max_pwm_speed_LED/2);
+				// Set LED PULSE to 1% brightnes
+				TIM2_SetCompare2(max_pwm_speed_LED/100);
 				
 				// Perform a smooth on-off cycle of the pump
 				duty_cycle_step = pump_smooth_on_off(duty_cycle_step);
 				
 				// Transition back to SLEEP state on fifth button press
 				if (press_count > 4)
-				{
-					
-					
-					current_state = STATE_SLEEP;	// Reset to SLEEP state
+				{					
+					current_state = STATE_LOW_SPEED;	// Reset to SLEEP state
 					
 					// Turn off the pump and reset press count
 					duty_cycle_step = pump_off(duty_cycle_step);
-					press_count = 0;
-					
+					press_count = 2;
 					
 					TIM2_SetCompare2(0);	// Turn off LED PULSE				
+				}
+				
+				// Transition to SLEEP state on long button press
+				if (long_press != 0)
+				{
+					current_state = STATE_SLEEP;
+					
+					// Turn off the pump and reset press count
+					duty_cycle_step = pump_off(duty_cycle_step);					
+					press_count = 0;
+					long_press = 0;
+					
+					// Turn off leds
+					TIM2_SetCompare2(0);
+					TIM2_SetCompare3(0);
+
 					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
 				}
 				break;
@@ -342,7 +443,7 @@ void EXTI_setup(void)
 	
 	EXTI_DeInit(); // Reset external interrupt configuration
 	//Enable PORTD interrupt on falling edges
-	EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOD, EXTI_SENSITIVITY_FALL_ONLY);  // Enable falling-edge sensitivity for Port D
+	EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOD, EXTI_SENSITIVITY_RISE_FALL);  // Enable falling and rising-edge sensitivity for Port D
 	EXTI_SetTLISensitivity(EXTI_TLISENSITIVITY_FALL_ONLY);  // Set TLI sensitivity to falling-edge
 	
 	enableInterrupts();	// Enable global interrupts. Do nothing if already enabled
@@ -373,12 +474,13 @@ void tim4_init(void) //Timer Used to count milliseconds for delay function
  * 
  * @param delay The delay duration in milliseconds.
  */
-void delay_ms(int delay)
+void delay_ms(uint16_t delay)
 {
-    int start = ms_count;	// Record the current timer count
+    uint16_t start = ms_count;	// Record the current timer count
     while ((ms_count - start) < delay);	// Wait until the delay period has elapsed
 		
 }
+
 
 /**
  * @brief Sets the PWM frequency for a specified timer.

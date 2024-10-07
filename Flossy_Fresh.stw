@@ -6,7 +6,3 @@ Keyword=ST7Workspace-V0.7
 [Project0]
 Filename=flossy_fresh.stp
 Dependencies=
-[Options]
-ActiveProject=flossy_fresh
-ActiveConfig=Debug
-AddSortedElements=0

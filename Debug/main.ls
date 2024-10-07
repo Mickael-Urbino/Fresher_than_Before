@@ -17,858 +17,958 @@
   31  000a 0000          	dc.w	0
   32  000c               _press_count:
   33  000c 00            	dc.b	0
-  34  000d               _duty_cycle_step:
-  35  000d 0000          	dc.w	0
-  36  000f               _pulse_flag:
-  37  000f 00            	dc.b	0
-  38  0010               _current_state:
-  39  0010 00            	dc.b	0
-  71                     ; 98 INTERRUPT_HANDLER(TIM4_UPD_OVF_IRQHandler, 23) {
-  72                     	switch	.text
-  73  0000               f_TIM4_UPD_OVF_IRQHandler:
-  75  0000 8a            	push	cc
-  76  0001 84            	pop	a
-  77  0002 a4bf          	and	a,#191
-  78  0004 88            	push	a
-  79  0005 86            	pop	cc
-  80  0006 3b0002        	push	c_x+2
-  81  0009 be00          	ldw	x,c_x
-  82  000b 89            	pushw	x
-  83  000c 3b0002        	push	c_y+2
-  84  000f be00          	ldw	x,c_y
-  85  0011 89            	pushw	x
-  88                     ; 99     ms_count++;  // Increment milliseconds count
-  90  0012 be00          	ldw	x,_ms_count
-  91  0014 5c            	incw	x
-  92  0015 bf00          	ldw	_ms_count,x
-  93                     ; 100     TIM4_ClearITPendingBit(TIM4_IT_UPDATE); // Clear interrupt pending bit for Timer 4
-  95  0017 a601          	ld	a,#1
-  96  0019 cd0000        	call	_TIM4_ClearITPendingBit
-  98                     ; 101 }
- 101  001c 85            	popw	x
- 102  001d bf00          	ldw	c_y,x
- 103  001f 320002        	pop	c_y+2
- 104  0022 85            	popw	x
- 105  0023 bf00          	ldw	c_x,x
- 106  0025 320002        	pop	c_x+2
- 107  0028 80            	iret	
- 133                     ; 110 INTERRUPT_HANDLER(EXTI_PORTD_IRQHandler, 6) {
- 134                     	switch	.text
- 135  0029               f_EXTI_PORTD_IRQHandler:
- 137  0029 8a            	push	cc
- 138  002a 84            	pop	a
- 139  002b a4bf          	and	a,#191
- 140  002d 88            	push	a
- 141  002e 86            	pop	cc
- 142  002f 3b0002        	push	c_x+2
- 143  0032 be00          	ldw	x,c_x
- 144  0034 89            	pushw	x
- 145  0035 3b0002        	push	c_y+2
- 146  0038 be00          	ldw	x,c_y
- 147  003a 89            	pushw	x
- 150                     ; 111 	delay_ms(50); // Debounce delay to ensure stable button press detection
- 152  003b ae0032        	ldw	x,#50
- 153  003e cd0216        	call	_delay_ms
- 155                     ; 113 	if (GPIO_ReadInputPin(GPIOD, GPIO_PIN_6) == 0) // Check if the button is pressed
- 157  0041 4b40          	push	#64
- 158  0043 ae500f        	ldw	x,#20495
- 159  0046 cd0000        	call	_GPIO_ReadInputPin
- 161  0049 5b01          	addw	sp,#1
- 162  004b 4d            	tnz	a
- 163  004c 2602          	jrne	L13
- 164                     ; 115 		press_count++; // Increment press count if the button is pressed
- 166  004e 3c0c          	inc	_press_count
- 167  0050               L13:
- 168                     ; 117 }
- 171  0050 85            	popw	x
- 172  0051 bf00          	ldw	c_y,x
- 173  0053 320002        	pop	c_y+2
- 174  0056 85            	popw	x
- 175  0057 bf00          	ldw	c_x,x
- 176  0059 320002        	pop	c_x+2
- 177  005c 80            	iret	
- 220                     ; 120 main()
- 220                     ; 121 {
- 222                     	switch	.text
- 223  005d               _main:
- 227                     ; 123 	clock_setup();						// Configure system clock and timing
- 229  005d cd0161        	call	_clock_setup
- 231                     ; 124 	EXTI_setup();							// Setup external interrupts for button handling
- 233  0060 cd01ea        	call	_EXTI_setup
- 235                     ; 125 	enableInterrupts();				// Globally enable interrupts
- 238  0063 9a            	rim	
- 240                     ; 133 	tim4_init();
- 243  0064 cd0202        	call	_tim4_init
- 245                     ; 134 	delay_ms(5000);						// 5-second delay to ensure SWIM pin availability
- 247  0067 ae1388        	ldw	x,#5000
- 248  006a cd0216        	call	_delay_ms
- 250                     ; 137 	gpio_setup();
- 252  006d cd01c1        	call	_gpio_setup
- 254                     ; 144 	max_pwm_speed_pump = tim1_init();	
- 256  0070 cd034a        	call	_tim1_init
- 258  0073 bf08          	ldw	_max_pwm_speed_pump,x
- 259  0075               L75:
- 260                     ; 154 		switch (current_state)
- 262  0075 b610          	ld	a,_current_state
- 264                     ; 273 				break;
- 265  0077 271c          	jreq	L33
- 266  0079 4a            	dec	a
- 267  007a 272f          	jreq	L53
- 268  007c 4a            	dec	a
- 269  007d 2603cc0105    	jreq	L14
- 270  0082 4a            	dec	a
- 271  0083 274b          	jreq	L73
- 272  0085 4a            	dec	a
- 273  0086 2603cc012f    	jreq	L34
- 274                     ; 262 			default:
- 274                     ; 263 			
- 274                     ; 264 				// Unexpected state: reset to SLEEP state as a failsafe
- 274                     ; 265 				current_state = STATE_SLEEP;	// Reset to SLEEP state
- 276  008b 3f10          	clr	_current_state
- 277                     ; 268 				duty_cycle_step = pump_off(duty_cycle_step);
- 279  008d cd0152        	call	LC002
- 280                     ; 269 				press_count = 0;
- 282  0090 3f0c          	clr	_press_count
- 283                     ; 271 				TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
- 285                     ; 273 				break;
- 287  0092 cc014c        	jp	LC001
- 288  0095               L33:
- 289                     ; 156 			case STATE_SLEEP: // Default state: minimal power consumption, awaiting wake-up
- 289                     ; 157 				
- 289                     ; 158 				if (duty_cycle_step != 0)
- 291  0095 be0d          	ldw	x,_duty_cycle_step
- 292  0097 2703          	jreq	L76
- 293                     ; 160 					duty_cycle_step = pump_off(duty_cycle_step);	// Ensure the pump is off in sleep state
- 295  0099 cd0152        	call	LC002
- 296  009c               L76:
- 297                     ; 163 				if (press_count > 0)
- 299  009c 3d0c          	tnz	_press_count
- 300  009e 27d5          	jreq	L75
- 301                     ; 165 					current_state = STATE_IDLE;
- 303  00a0 35010010      	mov	_current_state,#1
- 304                     ; 166 					max_pwm_speed_LED = tim2_init();	// Initialize Timer 2 for LED PWM control during IDLE state (SWIM is disabled)
- 306  00a4 cd0306        	call	_tim2_init
- 308  00a7 bf0a          	ldw	_max_pwm_speed_LED,x
- 309  00a9 20ca          	jra	L75
- 310  00ab               L53:
- 311                     ; 170 			case STATE_IDLE:	// Idle state: low LED brightness and pump off
- 311                     ; 171 			
- 311                     ; 172 				TIM2_SetCompare3(max_pwm_speed_LED/100);
- 313  00ab be0a          	ldw	x,_max_pwm_speed_LED
- 314  00ad a664          	ld	a,#100
- 315  00af 62            	div	x,a
- 316  00b0 cd0000        	call	_TIM2_SetCompare3
- 318                     ; 173 				TIM2_SetCompare2(max_pwm_speed_LED/100);
- 320  00b3 be0a          	ldw	x,_max_pwm_speed_LED
- 321  00b5 a664          	ld	a,#100
- 322  00b7 62            	div	x,a
- 323  00b8 cd0000        	call	_TIM2_SetCompare2
- 325                     ; 175 				pump_off(duty_cycle_step);	// Keep the pump turned off
- 327  00bb be0d          	ldw	x,_duty_cycle_step
- 328  00bd cd03c0        	call	_pump_off
- 330                     ; 178 				if (press_count > 1)
- 332  00c0 b60c          	ld	a,_press_count
- 333  00c2 a102          	cp	a,#2
- 334  00c4 25af          	jrult	L75
- 335                     ; 180 					current_state = STATE_LOW_SPEED;
- 337  00c6 35030010      	mov	_current_state,#3
- 338                     ; 182 					TIM2_SetCompare2(0);
- 340  00ca 5f            	clrw	x
- 341  00cb cd0000        	call	_TIM2_SetCompare2
- 343  00ce 20a5          	jra	L75
- 344  00d0               L73:
- 345                     ; 187 			case STATE_LOW_SPEED:	// Reduced pump speed with moderate LED brightness
- 345                     ; 188 				
- 345                     ; 189 				// Set LED brightness to 50% of maximum
- 345                     ; 190 				TIM2_SetCompare3(max_pwm_speed_LED/2);
- 347  00d0 be0a          	ldw	x,_max_pwm_speed_LED
- 348  00d2 54            	srlw	x
- 349  00d3 cd0000        	call	_TIM2_SetCompare3
- 351                     ; 193 				if (duty_cycle_step > (max_pwm_speed_pump/3)*2)
- 353  00d6 cd015a        	call	LC003
- 354  00d9 b30d          	cpw	x,_duty_cycle_step
- 355  00db 2407          	jruge	L57
- 356                     ; 195 					duty_cycle_step = decelerate_pump(duty_cycle_step);
- 358  00dd be0d          	ldw	x,_duty_cycle_step
- 359  00df cd03a5        	call	_decelerate_pump
- 362  00e2 2012          	jra	L77
- 363  00e4               L57:
- 364                     ; 197 				else if (duty_cycle_step < (max_pwm_speed_pump/3)*2)
- 366  00e4 ad74          	call	LC003
- 367  00e6 b30d          	cpw	x,_duty_cycle_step
- 368  00e8 2307          	jrule	L101
- 369                     ; 199 					duty_cycle_step = accelerate_pump(duty_cycle_step);
- 371  00ea be0d          	ldw	x,_duty_cycle_step
- 372  00ec cd0393        	call	_accelerate_pump
- 375  00ef 2005          	jra	L77
- 376  00f1               L101:
- 377                     ; 203 					duty_cycle_step = set_pump_speed((max_pwm_speed_pump/3)*2);	// Maintain 2/3 speed
- 379  00f1 ad67          	call	LC003
- 380  00f3 cd03b7        	call	_set_pump_speed
- 382  00f6               L77:
- 383  00f6 bf0d          	ldw	_duty_cycle_step,x
- 384                     ; 207 				if (press_count > 2)
- 386  00f8 b60c          	ld	a,_press_count
- 387  00fa a103          	cp	a,#3
- 388  00fc 25d0          	jrult	L75
- 389                     ; 209 					current_state = STATE_FULL_SPEED;
- 391  00fe 35020010      	mov	_current_state,#2
- 392  0102 cc0075        	jra	L75
- 393  0105               L14:
- 394                     ; 213 			case STATE_FULL_SPEED:	// Full pump speed and LED brightness
- 394                     ; 214 				
- 394                     ; 215 				// Set LED to maximum brightness
- 394                     ; 216 				TIM2_SetCompare3(max_pwm_speed_LED);
- 396  0105 be0a          	ldw	x,_max_pwm_speed_LED
- 397  0107 cd0000        	call	_TIM2_SetCompare3
- 399                     ; 219 				if (duty_cycle_step < max_pwm_speed_pump)
- 401  010a be0d          	ldw	x,_duty_cycle_step
- 402  010c b308          	cpw	x,_max_pwm_speed_pump
- 403  010e 2407          	jruge	L701
- 404                     ; 221 					duty_cycle_step = accelerate_pump(duty_cycle_step);
- 406  0110 be0d          	ldw	x,_duty_cycle_step
- 407  0112 cd0393        	call	_accelerate_pump
- 410  0115 2005          	jra	L111
- 411  0117               L701:
- 412                     ; 225 					duty_cycle_step = set_pump_speed(max_pwm_speed_pump);	// Maintain max speed
- 414  0117 be08          	ldw	x,_max_pwm_speed_pump
- 415  0119 cd03b7        	call	_set_pump_speed
- 417  011c               L111:
- 418  011c bf0d          	ldw	_duty_cycle_step,x
- 419                     ; 229 				if (press_count > 3)
- 421  011e b60c          	ld	a,_press_count
- 422  0120 a104          	cp	a,#4
- 423  0122 25de          	jrult	L75
- 424                     ; 231 					current_state = STATE_PULSE;
- 426  0124 35040010      	mov	_current_state,#4
- 427                     ; 232 					TIM2_SetCompare3(0);	// Turn off the STRONG/WEAK LEDs					
- 429  0128 5f            	clrw	x
- 430  0129 cd0000        	call	_TIM2_SetCompare3
- 432  012c cc0075        	jra	L75
- 433  012f               L34:
- 434                     ; 237 			case STATE_PULSE:	// Pulsed pump operation with LED indication
- 434                     ; 238 			
- 434                     ; 239 				// Set LED PULSE to 50% brightnes
- 434                     ; 240 				TIM2_SetCompare2(max_pwm_speed_LED/2);
- 436  012f be0a          	ldw	x,_max_pwm_speed_LED
- 437  0131 54            	srlw	x
- 438  0132 cd0000        	call	_TIM2_SetCompare2
- 440                     ; 243 				duty_cycle_step = pump_smooth_on_off(duty_cycle_step);
- 442  0135 be0d          	ldw	x,_duty_cycle_step
- 443  0137 cd03d1        	call	_pump_smooth_on_off
- 445  013a bf0d          	ldw	_duty_cycle_step,x
- 446                     ; 246 				if (press_count > 4)
- 448  013c b60c          	ld	a,_press_count
- 449  013e a105          	cp	a,#5
- 450  0140 25ea          	jrult	L75
- 451                     ; 250 					current_state = STATE_SLEEP;	// Reset to SLEEP state
- 453  0142 3f10          	clr	_current_state
- 454                     ; 253 					duty_cycle_step = pump_off(duty_cycle_step);
- 456  0144 ad0c          	call	LC002
- 457                     ; 254 					press_count = 0;
- 459  0146 3f0c          	clr	_press_count
- 460                     ; 257 					TIM2_SetCompare2(0);	// Turn off LED PULSE				
- 462  0148 5f            	clrw	x
- 463  0149 cd0000        	call	_TIM2_SetCompare2
- 465                     ; 258 					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
- 467  014c               LC001:
- 469  014c cd0000        	call	_TIM2_DeInit
- 471  014f cc0075        	jra	L75
- 472                     ; 273 				break;
- 473  0152               LC002:
- 474  0152 be0d          	ldw	x,_duty_cycle_step
- 475  0154 cd03c0        	call	_pump_off
- 477  0157 bf0d          	ldw	_duty_cycle_step,x
- 478  0159 81            	ret	
- 479  015a               LC003:
- 480  015a be08          	ldw	x,_max_pwm_speed_pump
- 481  015c a603          	ld	a,#3
- 482  015e 62            	div	x,a
- 483  015f 58            	sllw	x
- 484  0160 81            	ret	
- 517                     ; 285 void clock_setup(void)
- 517                     ; 286 {
- 518                     	switch	.text
- 519  0161               _clock_setup:
- 523                     ; 287 	CLK_DeInit();		// Reset clock configuration to default state
- 525  0161 cd0000        	call	_CLK_DeInit
- 527                     ; 289 	CLK_HSECmd(DISABLE);  // Disable external high-speed clock
- 529  0164 4f            	clr	a
- 530  0165 cd0000        	call	_CLK_HSECmd
- 532                     ; 290 	CLK_LSICmd(DISABLE);  // Disable low-speed internal clock
- 534  0168 4f            	clr	a
- 535  0169 cd0000        	call	_CLK_LSICmd
- 537                     ; 291 	CLK_HSICmd(ENABLE);   // Enable internal high-speed clock (16 MHz)
- 539  016c a601          	ld	a,#1
- 540  016e cd0000        	call	_CLK_HSICmd
- 543  0171               L131:
- 544                     ; 293 	while(CLK_GetFlagStatus(CLK_FLAG_HSIRDY) == FALSE);	// Wait until HSI clock is stable
- 546  0171 ae0102        	ldw	x,#258
- 547  0174 cd0000        	call	_CLK_GetFlagStatus
- 549  0177 4d            	tnz	a
- 550  0178 27f7          	jreq	L131
- 551                     ; 295 	CLK_ClockSwitchCmd(ENABLE);  // Enable automatic clock switching
- 553  017a a601          	ld	a,#1
- 554  017c cd0000        	call	_CLK_ClockSwitchCmd
- 556                     ; 296 	CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);  // Set HSI clock prescaler (Peripheral Clock = 16 MHz)
- 558  017f 4f            	clr	a
- 559  0180 cd0000        	call	_CLK_HSIPrescalerConfig
- 561                     ; 297 	CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);  // Set CPU clock prescaler (CPU Clock = 16 MHz)
- 563  0183 a680          	ld	a,#128
- 564  0185 cd0000        	call	_CLK_SYSCLKConfig
- 566                     ; 299 	CLK_ClockSwitchConfig(CLK_SWITCHMODE_AUTO, CLK_SOURCE_HSI, 
- 566                     ; 300 	DISABLE, CLK_CURRENTCLOCKSTATE_ENABLE);
- 568  0188 4b01          	push	#1
- 569  018a 4b00          	push	#0
- 570  018c ae01e1        	ldw	x,#481
- 571  018f cd0000        	call	_CLK_ClockSwitchConfig
- 573  0192 85            	popw	x
- 574                     ; 303 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_I2C, DISABLE);
- 576  0193 5f            	clrw	x
- 577  0194 cd0000        	call	_CLK_PeripheralClockConfig
- 579                     ; 304 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_SPI, DISABLE);
- 581  0197 ae0100        	ldw	x,#256
- 582  019a cd0000        	call	_CLK_PeripheralClockConfig
- 584                     ; 305 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_ADC, DISABLE);
- 586  019d ae1300        	ldw	x,#4864
- 587  01a0 cd0000        	call	_CLK_PeripheralClockConfig
- 589                     ; 306 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_AWU, DISABLE);
- 591  01a3 ae1200        	ldw	x,#4608
- 592  01a6 cd0000        	call	_CLK_PeripheralClockConfig
- 594                     ; 307 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_UART1, DISABLE);	
- 596  01a9 ae0300        	ldw	x,#768
- 597  01ac cd0000        	call	_CLK_PeripheralClockConfig
- 599                     ; 308 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER1, ENABLE);  // Enable Timer 1 for PWM generation
- 601  01af ae0701        	ldw	x,#1793
- 602  01b2 cd0000        	call	_CLK_PeripheralClockConfig
- 604                     ; 309 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER2, ENABLE);  // Enable Timer 2 for PWM generation
- 606  01b5 ae0501        	ldw	x,#1281
- 607  01b8 cd0000        	call	_CLK_PeripheralClockConfig
- 609                     ; 310 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER4, ENABLE);  // Enable Timer 4 for delay function
- 611  01bb ae0401        	ldw	x,#1025
- 613                     ; 312 }
- 616  01be cc0000        	jp	_CLK_PeripheralClockConfig
- 641                     ; 321 void gpio_setup(void)
- 641                     ; 322 {
- 642                     	switch	.text
- 643  01c1               _gpio_setup:
- 647                     ; 323 	GPIO_DeInit(GPIOA);  // Reset Port A configuration
- 649  01c1 ae5000        	ldw	x,#20480
- 650  01c4 cd0000        	call	_GPIO_DeInit
- 652                     ; 324 	GPIO_DeInit(GPIOB);  // Reset Port B configuration
- 654  01c7 ae5005        	ldw	x,#20485
- 655  01ca cd0000        	call	_GPIO_DeInit
- 657                     ; 325 	GPIO_DeInit(GPIOD);  // Reset Port D configuration
- 659  01cd ae500f        	ldw	x,#20495
- 660  01d0 cd0000        	call	_GPIO_DeInit
- 662                     ; 327 	GPIO_Init(GPIOD, GPIO_PIN_6, GPIO_MODE_IN_FL_IT);					// Configure Pin D6 as an floating input with interrupt
- 664  01d3 4b20          	push	#32
- 665  01d5 4b40          	push	#64
- 666  01d7 ae500f        	ldw	x,#20495
- 667  01da cd0000        	call	_GPIO_Init
- 669  01dd 85            	popw	x
- 670                     ; 328 	GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_PP_LOW_FAST);	// Configure Pin B4 as push-pull output with fast response
- 672  01de 4be0          	push	#224
- 673  01e0 4b10          	push	#16
- 674  01e2 ae5005        	ldw	x,#20485
- 675  01e5 cd0000        	call	_GPIO_Init
- 677  01e8 85            	popw	x
- 678                     ; 329 }
- 681  01e9 81            	ret	
- 710                     ; 338 void EXTI_setup(void)
- 710                     ; 339 {
- 711                     	switch	.text
- 712  01ea               _EXTI_setup:
- 716                     ; 340 	ITC_DeInit();	// Reset interrupt controller configuration
- 718  01ea cd0000        	call	_ITC_DeInit
- 720                     ; 341 	ITC_SetSoftwarePriority(ITC_IRQ_PORTD, ITC_PRIORITYLEVEL_0); 	// Set Port D interrupt priority to level 0 (lowest)
- 722  01ed ae0602        	ldw	x,#1538
- 723  01f0 cd0000        	call	_ITC_SetSoftwarePriority
- 725                     ; 343 	EXTI_DeInit(); // Reset external interrupt configuration
- 727  01f3 cd0000        	call	_EXTI_DeInit
- 729                     ; 345 	EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOD, EXTI_SENSITIVITY_FALL_ONLY);  // Enable falling-edge sensitivity for Port D
- 731  01f6 ae0302        	ldw	x,#770
- 732  01f9 cd0000        	call	_EXTI_SetExtIntSensitivity
- 734                     ; 346 	EXTI_SetTLISensitivity(EXTI_TLISENSITIVITY_FALL_ONLY);  // Set TLI sensitivity to falling-edge
- 736  01fc 4f            	clr	a
- 737  01fd cd0000        	call	_EXTI_SetTLISensitivity
- 739                     ; 348 	enableInterrupts();	// Enable global interrupts. Do nothing if already enabled
- 742  0200 9a            	rim	
- 744                     ; 349 }
- 748  0201 81            	ret	
- 775                     ; 358 void tim4_init(void) //Timer Used to count milliseconds for delay function
- 775                     ; 359 {
- 776                     	switch	.text
- 777  0202               _tim4_init:
- 781                     ; 361 	TIM4_DeInit();	// Reset Timer 4 configuration
- 783  0202 cd0000        	call	_TIM4_DeInit
- 785                     ; 362 	TIM4_TimeBaseInit(TIM4_PRESCALER_128, 125); // Set prescaler to 128 and set ARR to 125 (1 ms period). CLK_PRESCALER_HSIDIV1/TIM4_PRESCALER_128 => F_TIM4 = 125kHz. Counter needs to reach 125 to get 1ms.
- 787  0205 ae077d        	ldw	x,#1917
- 788  0208 cd0000        	call	_TIM4_TimeBaseInit
- 790                     ; 363 	TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);  // Enable update interrupt
- 792  020b ae0101        	ldw	x,#257
- 793  020e cd0000        	call	_TIM4_ITConfig
- 795                     ; 364 	TIM4_Cmd(ENABLE);  // Start Timer 4
- 797  0211 a601          	ld	a,#1
- 799                     ; 366 }
- 802  0213 cc0000        	jp	_TIM4_Cmd
- 846                     ; 376 void delay_ms(int delay)
- 846                     ; 377 {
- 847                     	switch	.text
- 848  0216               _delay_ms:
- 850  0216 89            	pushw	x
- 851  0217 89            	pushw	x
- 852       00000002      OFST:	set	2
- 855                     ; 378     int start = ms_count;	// Record the current timer count
- 857  0218 be00          	ldw	x,_ms_count
- 858  021a 1f01          	ldw	(OFST-1,sp),x
- 861  021c               L312:
- 862                     ; 379     while ((ms_count - start) < delay);	// Wait until the delay period has elapsed
- 864  021c be00          	ldw	x,_ms_count
- 865  021e 72f001        	subw	x,(OFST-1,sp)
- 866  0221 1303          	cpw	x,(OFST+1,sp)
- 867  0223 2ff7          	jrslt	L312
- 868                     ; 381 }
- 871  0225 5b04          	addw	sp,#4
- 872  0227 81            	ret	
- 943                     .const:	section	.text
- 944  0000               L422:
- 945  0000 00010000      	dc.l	65536
- 946                     ; 396 uint16_t set_pwm_frequency(uint8_t timer, uint16_t frequency, uint8_t hsi_prescaler, uint8_t timx_prescaler)
- 946                     ; 397 {
- 947                     	switch	.text
- 948  0228               _set_pwm_frequency:
- 950  0228 88            	push	a
- 951  0229 520c          	subw	sp,#12
- 952       0000000c      OFST:	set	12
- 955                     ; 398 	uint32_t arr = 0; //uint32_t to avoid 16-bit overflow
- 957                     ; 399 	switch (hsi_prescaler)
- 959  022b 7b12          	ld	a,(OFST+6,sp)
- 961                     ; 415 			break;
- 962  022d 270e          	jreq	L712
- 963  022f a008          	sub	a,#8
- 964  0231 270d          	jreq	L122
- 965  0233 a008          	sub	a,#8
- 966  0235 270d          	jreq	L322
- 967  0237 a008          	sub	a,#8
- 968  0239 270d          	jreq	L522
- 969  023b 200f          	jra	L762
- 970  023d               L712:
- 971                     ; 401 		case 0x00:
- 971                     ; 402 			hsi_prescaler = 1;
- 973  023d 4c            	inc	a
- 974                     ; 403 			break;
- 976  023e 200a          	jp	LC004
- 977  0240               L122:
- 978                     ; 405 		case 0x08:
- 978                     ; 406 			hsi_prescaler = 2;
- 980  0240 a602          	ld	a,#2
- 981                     ; 407 			break;
- 983  0242 2006          	jp	LC004
- 984  0244               L322:
- 985                     ; 409 		case 0x10:
- 985                     ; 410 			hsi_prescaler = 4;
- 987  0244 a604          	ld	a,#4
- 988                     ; 411 			break;
- 990  0246 2002          	jp	LC004
- 991  0248               L522:
- 992                     ; 413 		case 0x18:
- 992                     ; 414 			hsi_prescaler = 8;
- 994  0248 a608          	ld	a,#8
- 995  024a               LC004:
- 996  024a 6b12          	ld	(OFST+6,sp),a
- 997                     ; 415 			break;
- 999  024c               L762:
-1000                     ; 418 	if (timer !=  1)
-1002  024c 7b0d          	ld	a,(OFST+1,sp)
-1003  024e 4a            	dec	a
-1004  024f 275f          	jreq	L172
-1005                     ; 420 		arr = (HSI_FREQ/(frequency*hsi_prescaler*(pow(2, timx_prescaler))))-1;
-1022  0251 2005          	jra	L713
-1023  0253               L313:
-1024                     ; 424 			frequency++;
-1026  0253 1e10          	ldw	x,(OFST+4,sp)
-1027  0255 5c            	incw	x
-1028  0256 1f10          	ldw	(OFST+4,sp),x
-1029                     ; 425 			arr = (HSI_FREQ/(frequency*hsi_prescaler*(pow(2, timx_prescaler))))-1;		
-1046  0258               L713:
-1048  0258 7b13          	ld	a,(OFST+7,sp)
-1049  025a 5f            	clrw	x
-1050  025b 97            	ld	xl,a
-1051  025c cd0000        	call	c_itof
-1052  025f be02          	ldw	x,c_lreg+2
-1053  0261 89            	pushw	x
-1054  0262 be00          	ldw	x,c_lreg
-1055  0264 89            	pushw	x
-1056  0265 ce000a        	ldw	x,L772+2
-1057  0268 89            	pushw	x
-1058  0269 ce0008        	ldw	x,L772
-1059  026c 89            	pushw	x
-1060  026d cd0000        	call	_pow
-1061  0270 5b08          	addw	sp,#8
-1062  0272 96            	ldw	x,sp
-1063  0273 1c0005        	addw	x,#OFST-7
-1064  0276 cd0000        	call	c_rtol
-1065  0279 1e10          	ldw	x,(OFST+4,sp)
-1066  027b 7b12          	ld	a,(OFST+6,sp)
-1067  027d cd0000        	call	c_bmulx
-1068  0280 cd0000        	call	c_uitof
-1069  0283 96            	ldw	x,sp
-1070  0284 1c0005        	addw	x,#OFST-7
-1071  0287 cd0000        	call	c_fmul
-1072  028a 96            	ldw	x,sp
-1073  028b 5c            	incw	x
-1074  028c ad5e          	call	LC005
-1075  028e cd0000        	call	c_ltof
-1076  0291 96            	ldw	x,sp
-1077  0292 5c            	incw	x
-1078  0293 cd0000        	call	c_fdiv
-1079  0296 ae0004        	ldw	x,#L703
-1080  0299 cd0000        	call	c_fsub
-1081  029c cd0000        	call	c_ftol
-1082  029f 96            	ldw	x,sp
-1083  02a0 1c0009        	addw	x,#OFST-3
-1084  02a3 cd0000        	call	c_rtol
-1085                     ; 422 		while (arr > 65535) //Ajust Frequency to get it back into ARR 16-bit limit.
-1087  02a6 96            	ldw	x,sp
-1088  02a7 ad51          	call	LC006
-1090  02a9 24a8          	jruge	L313
-1092  02ab               L323:
-1093                     ; 440 	return (uint16_t)arr;
-1095  02ab 1e0b          	ldw	x,(OFST-1,sp)
-1098  02ad 5b0d          	addw	sp,#13
-1099  02af 81            	ret	
-1100  02b0               L172:
-1101                     ; 430 		arr = (HSI_FREQ/(frequency*hsi_prescaler*(timx_prescaler + 1)))-1;
-1103  02b0 1e10          	ldw	x,(OFST+4,sp)
-1114  02b2 2005          	jra	L133
-1115  02b4               L523:
-1116                     ; 434 			frequency++;
-1118  02b4 1e10          	ldw	x,(OFST+4,sp)
-1119  02b6 5c            	incw	x
-1120  02b7 1f10          	ldw	(OFST+4,sp),x
-1121                     ; 435 			arr = (HSI_FREQ/(frequency*hsi_prescaler*(timx_prescaler + 1)))-1;		
-1132  02b9               L133:
-1133  02b9 7b12          	ld	a,(OFST+6,sp)
-1134  02bb cd0000        	call	c_bmulx
-1135  02be 7b13          	ld	a,(OFST+7,sp)
-1136  02c0 905f          	clrw	y
-1137  02c2 9097          	ld	yl,a
-1138  02c4 905c          	incw	y
-1139  02c6 cd0000        	call	c_imul
-1140  02c9 cd0000        	call	c_uitolx
-1141  02cc 96            	ldw	x,sp
-1142  02cd 1c0005        	addw	x,#OFST-7
-1143  02d0 ad1a          	call	LC005
-1144  02d2 96            	ldw	x,sp
-1145  02d3 1c0005        	addw	x,#OFST-7
-1146  02d6 cd0000        	call	c_ldiv
-1147  02d9 a601          	ld	a,#1
-1148  02db cd0000        	call	c_lsbc
-1149  02de 96            	ldw	x,sp
-1150  02df 1c0009        	addw	x,#OFST-3
-1151  02e2 cd0000        	call	c_rtol
-1152                     ; 432 		while (arr > 65535) //Adjust PWM Frequency so ARR is not out of range.
-1154  02e5 96            	ldw	x,sp
-1155  02e6 ad12          	call	LC006
-1157  02e8 24ca          	jruge	L523
-1158  02ea 20bf          	jra	L323
-1159  02ec               LC005:
-1160  02ec cd0000        	call	c_rtol
-1161  02ef ae2400        	ldw	x,#9216
-1162  02f2 bf02          	ldw	c_lreg+2,x
-1163  02f4 ae00f4        	ldw	x,#244
-1164  02f7 bf00          	ldw	c_lreg,x
-1165  02f9 81            	ret	
-1166  02fa               LC006:
-1167  02fa 1c0009        	addw	x,#OFST-3
-1168  02fd cd0000        	call	c_ltor
-1170  0300 ae0000        	ldw	x,#L422
-1171  0303 cc0000        	jp	c_lcmp
-1212                     ; 451 uint16_t tim2_init(void)
-1212                     ; 452 {
-1213                     	switch	.text
-1214  0306               _tim2_init:
-1216  0306 89            	pushw	x
-1217       00000002      OFST:	set	2
-1220                     ; 454 	uint16_t ARR = set_pwm_frequency(TIMER_2, TIM2_CH3_FREQ, CLK_PRESCALER_HSIDIV1, TIM2_PRESCALER_1);
-1222  0307 4b00          	push	#0
-1223  0309 4b00          	push	#0
-1224  030b ae4e20        	ldw	x,#20000
-1225  030e 89            	pushw	x
-1226  030f a602          	ld	a,#2
-1227  0311 cd0228        	call	_set_pwm_frequency
-1229  0314 5b04          	addw	sp,#4
-1230  0316 1f01          	ldw	(OFST-1,sp),x
-1232                     ; 457 	OCR = 0;
-1234  0318 5f            	clrw	x
-1235  0319 bf02          	ldw	_OCR,x
-1236                     ; 460 	TIM2_DeInit();
-1238  031b cd0000        	call	_TIM2_DeInit
-1240                     ; 463 	TIM2_TimeBaseInit(TIM2_PRESCALER_1, ARR); //Set TIM2 Prescaler and period (in number of ticks) Note: ARRmax = 65535 (Adjust prescaler to get the correct pwm frequency)
-1242  031e 1e01          	ldw	x,(OFST-1,sp)
-1243  0320 89            	pushw	x
-1244  0321 4f            	clr	a
-1245  0322 cd0000        	call	_TIM2_TimeBaseInit
-1247  0325 85            	popw	x
-1248                     ; 466 	TIM2_OC3Init(TIM2_OCMODE_PWM1, TIM2_OUTPUTSTATE_ENABLE, OCR, TIM2_OCPOLARITY_HIGH); // For LED_STRONG
-1250  0326 4b00          	push	#0
-1251  0328 be02          	ldw	x,_OCR
-1252  032a 89            	pushw	x
-1253  032b ae6011        	ldw	x,#24593
-1254  032e cd0000        	call	_TIM2_OC3Init
-1256  0331 5b03          	addw	sp,#3
-1257                     ; 467 	TIM2_OC2Init(TIM2_OCMODE_PWM1, TIM2_OUTPUTSTATE_ENABLE, OCR, TIM2_OCPOLARITY_HIGH); // For LED_PULSE
-1259  0333 4b00          	push	#0
-1260  0335 be02          	ldw	x,_OCR
-1261  0337 89            	pushw	x
-1262  0338 ae6011        	ldw	x,#24593
-1263  033b cd0000        	call	_TIM2_OC2Init
-1265  033e 5b03          	addw	sp,#3
-1266                     ; 470 	TIM2_Cmd(ENABLE);
-1268  0340 a601          	ld	a,#1
-1269  0342 cd0000        	call	_TIM2_Cmd
-1271                     ; 473 	return ARR;
-1273  0345 1e01          	ldw	x,(OFST-1,sp)
-1276  0347 5b02          	addw	sp,#2
-1277  0349 81            	ret	
-1318                     ; 487 uint16_t tim1_init(void)
-1318                     ; 488 {
-1319                     	switch	.text
-1320  034a               _tim1_init:
-1322  034a 89            	pushw	x
-1323       00000002      OFST:	set	2
-1326                     ; 490 	uint16_t ARR = set_pwm_frequency(TIMER_1, TIM1_CH3_FREQ, CLK_PRESCALER_HSIDIV1, TIM1_PRESCALER_1);
-1328  034b 4b00          	push	#0
-1329  034d 4b00          	push	#0
-1330  034f ae4e20        	ldw	x,#20000
-1331  0352 89            	pushw	x
-1332  0353 a601          	ld	a,#1
-1333  0355 cd0228        	call	_set_pwm_frequency
-1335  0358 5b04          	addw	sp,#4
-1336  035a 1f01          	ldw	(OFST-1,sp),x
-1338                     ; 493 	OCR = 0; //Enable PWM but force it Low to avoid driving things unintentionally
-1340  035c 5f            	clrw	x
-1341  035d bf02          	ldw	_OCR,x
-1342                     ; 496 	TIM1_DeInit();
-1344  035f cd0000        	call	_TIM1_DeInit
-1346                     ; 499 	TIM1_TimeBaseInit(TIM1_PRESCALER_1, TIM1_COUNTERMODE_UP, ARR, TIM1_REP_COUNTER);
-1348  0362 4b00          	push	#0
-1349  0364 1e02          	ldw	x,(OFST+0,sp)
-1350  0366 89            	pushw	x
-1351  0367 4b00          	push	#0
-1352  0369 5f            	clrw	x
-1353  036a cd0000        	call	_TIM1_TimeBaseInit
-1355  036d 5b04          	addw	sp,#4
-1356                     ; 502 	TIM1_OC3Init(TIM1_OCMODE_PWM1,TIM1_OUTPUTSTATE_ENABLE, TIM1_OUTPUTNSTATE_DISABLE, OCR, TIM1_OCPOLARITY_HIGH, TIM1_OCNPOLARITY_LOW, TIM1_OCIDLESTATE_RESET, TIM1_OCNIDLESTATE_RESET);
-1358  036f 4b00          	push	#0
-1359  0371 4b00          	push	#0
-1360  0373 4b88          	push	#136
-1361  0375 4b00          	push	#0
-1362  0377 be02          	ldw	x,_OCR
-1363  0379 89            	pushw	x
-1364  037a 4b00          	push	#0
-1365  037c ae6011        	ldw	x,#24593
-1366  037f cd0000        	call	_TIM1_OC3Init
-1368  0382 5b07          	addw	sp,#7
-1369                     ; 505 	TIM1_Cmd(ENABLE);
-1371  0384 a601          	ld	a,#1
-1372  0386 cd0000        	call	_TIM1_Cmd
-1374                     ; 508 	TIM1_CtrlPWMOutputs(ENABLE);
-1376  0389 a601          	ld	a,#1
-1377  038b cd0000        	call	_TIM1_CtrlPWMOutputs
-1379                     ; 511 	return ARR;
-1381  038e 1e01          	ldw	x,(OFST-1,sp)
-1384  0390 5b02          	addw	sp,#2
-1385  0392 81            	ret	
-1421                     ; 525 uint16_t accelerate_pump(uint16_t duty_cycle_step)
-1421                     ; 526 {	
-1422                     	switch	.text
-1423  0393               _accelerate_pump:
-1425  0393 89            	pushw	x
-1426       00000000      OFST:	set	0
-1429                     ; 527 	delay_ms(1); // Short delay to smooth out the ramp-up.
-1431  0394 ae0001        	ldw	x,#1
-1432  0397 cd0216        	call	_delay_ms
-1434                     ; 528 	TIM1_SetCompare3(duty_cycle_step); // Update the PWM duty cycle.
-1436  039a 1e01          	ldw	x,(OFST+1,sp)
-1437  039c cd0000        	call	_TIM1_SetCompare3
-1439                     ; 529 	duty_cycle_step++; // Increment the duty cycle value.
-1441  039f 1e01          	ldw	x,(OFST+1,sp)
-1442  03a1 5c            	incw	x
-1443                     ; 531 	return duty_cycle_step; // Return the updated duty cycle.
-1447  03a2 5b02          	addw	sp,#2
-1448  03a4 81            	ret	
-1484                     ; 544 uint16_t decelerate_pump(uint16_t duty_cycle_step)
-1484                     ; 545 {	
-1485                     	switch	.text
-1486  03a5               _decelerate_pump:
-1488  03a5 89            	pushw	x
-1489       00000000      OFST:	set	0
-1492                     ; 546 	delay_ms(1); // Short delay to smooth out the ramp-down.
-1494  03a6 ae0001        	ldw	x,#1
-1495  03a9 cd0216        	call	_delay_ms
-1497                     ; 547 	TIM1_SetCompare3(duty_cycle_step); // Update the PWM duty cycle.
-1499  03ac 1e01          	ldw	x,(OFST+1,sp)
-1500  03ae cd0000        	call	_TIM1_SetCompare3
-1502                     ; 548 	duty_cycle_step--; // Decrement the duty cycle value.
-1504  03b1 1e01          	ldw	x,(OFST+1,sp)
-1505  03b3 5a            	decw	x
-1506                     ; 550 	return duty_cycle_step; // Return the updated duty cycle.
-1510  03b4 5b02          	addw	sp,#2
-1511  03b6 81            	ret	
-1546                     ; 562 uint16_t set_pump_speed(uint16_t duty_cycle_step)
-1546                     ; 563 {	
-1547                     	switch	.text
-1548  03b7               _set_pump_speed:
-1550  03b7 89            	pushw	x
-1551       00000000      OFST:	set	0
-1554                     ; 564 	TIM1_SetCompare3(duty_cycle_step); // Set the PWM duty cycle to the specified value.
-1556  03b8 cd0000        	call	_TIM1_SetCompare3
-1558                     ; 565 	return duty_cycle_step; // Return the specified duty cycle.
-1560  03bb 1e01          	ldw	x,(OFST+1,sp)
-1563  03bd 5b02          	addw	sp,#2
-1564  03bf 81            	ret	
-1600                     ; 580 uint16_t pump_off(uint16_t duty_cycle_step)
-1600                     ; 581 {
-1601                     	switch	.text
-1602  03c0               _pump_off:
-1604  03c0 89            	pushw	x
-1605       00000000      OFST:	set	0
-1608                     ; 582 	if (duty_cycle_step > 0)
-1610  03c1 5d            	tnzw	x
-1611  03c2 2704          	jreq	L164
-1612                     ; 585 		duty_cycle_step = decelerate_pump(duty_cycle_step);
-1614  03c4 addf          	call	_decelerate_pump
-1617  03c6 2006          	jra	L364
-1618  03c8               L164:
-1619                     ; 590 		TIM1_SetCompare3(0);
-1621  03c8 5f            	clrw	x
-1622  03c9 cd0000        	call	_TIM1_SetCompare3
-1624  03cc 1e01          	ldw	x,(OFST+1,sp)
-1625  03ce               L364:
-1626                     ; 593 	return duty_cycle_step;
-1630  03ce 5b02          	addw	sp,#2
-1631  03d0 81            	ret	
-1669                     ; 609 uint16_t pump_smooth_on_off(uint16_t duty_cycle_step)
-1669                     ; 610 {
-1670                     	switch	.text
-1671  03d1               _pump_smooth_on_off:
-1673  03d1 89            	pushw	x
-1674       00000000      OFST:	set	0
-1677                     ; 612 	if ((duty_cycle_step < max_pwm_speed_pump) && (pulse_flag == 0))
-1679  03d2 b308          	cpw	x,_max_pwm_speed_pump
-1680  03d4 240a          	jruge	L305
-1682  03d6 3d0f          	tnz	_pulse_flag
-1683  03d8 2606          	jrne	L305
-1684                     ; 614 		duty_cycle_step = accelerate_pump(duty_cycle_step);				// Increase the duty cycle			
-1686  03da adb7          	call	_accelerate_pump
-1688  03dc 1f01          	ldw	(OFST+1,sp),x
-1690  03de 2004          	jra	L505
-1691  03e0               L305:
-1692                     ; 618 		pulse_flag = 1;	// Switch to deceleration mode
-1694  03e0 3501000f      	mov	_pulse_flag,#1
-1695  03e4               L505:
-1696                     ; 622 	if ((duty_cycle_step > 0) && (pulse_flag == 1))
-1698  03e4 1e01          	ldw	x,(OFST+1,sp)
-1699  03e6 2709          	jreq	L705
-1701  03e8 b60f          	ld	a,_pulse_flag
-1702  03ea 4a            	dec	a
-1703  03eb 2604          	jrne	L705
-1704                     ; 624 		duty_cycle_step = decelerate_pump(duty_cycle_step);	// Decrease the duty cycle		
-1706  03ed adb6          	call	_decelerate_pump
-1709  03ef 2002          	jra	L115
-1710  03f1               L705:
-1711                     ; 628 		pulse_flag = 0;				// Switch back to acceleration mode once the duty cycle reaches zero
-1713  03f1 3f0f          	clr	_pulse_flag
-1714  03f3               L115:
-1715                     ; 630 	return duty_cycle_step;	// Return the updated duty cycle value
-1719  03f3 5b02          	addw	sp,#2
-1720  03f5 81            	ret	
-1888                     	xdef	_main
-1889                     	xdef	_current_state
-1890                     	xdef	_pump_off
-1891                     	xdef	_decelerate_pump
-1892                     	xdef	_accelerate_pump
-1893                     	xdef	_set_pump_speed
-1894                     	xdef	_pump_smooth_on_off
-1895                     	xdef	_tim1_init
-1896                     	xdef	_tim2_init
-1897                     	xdef	_set_pwm_frequency
-1898                     	xdef	_delay_ms
-1899                     	xdef	_tim4_init
-1900                     	xdef	_EXTI_setup
-1901                     	xdef	_gpio_setup
-1902                     	xdef	_clock_setup
-1903                     	xdef	_pulse_flag
-1904                     	xdef	_duty_cycle_step
-1905                     	xdef	_press_count
-1906                     	xdef	_max_pwm_speed_LED
-1907                     	xdef	_max_pwm_speed_pump
-1908                     	xdef	_arr_tim2
-1909                     	xdef	_arr_tim1
-1910                     	xdef	_OCR
-1911                     	xref	_pow
-1912                     	xdef	f_TIM4_UPD_OVF_IRQHandler
-1913                     	xdef	f_EXTI_PORTD_IRQHandler
-1914                     	xdef	_ms_count
-1915                     	xref	_TIM4_ClearITPendingBit
-1916                     	xref	_TIM4_ITConfig
-1917                     	xref	_TIM4_Cmd
-1918                     	xref	_TIM4_TimeBaseInit
-1919                     	xref	_TIM4_DeInit
-1920                     	xref	_TIM2_SetCompare3
-1921                     	xref	_TIM2_SetCompare2
-1922                     	xref	_TIM2_Cmd
-1923                     	xref	_TIM2_OC3Init
-1924                     	xref	_TIM2_OC2Init
-1925                     	xref	_TIM2_TimeBaseInit
-1926                     	xref	_TIM2_DeInit
-1927                     	xref	_TIM1_SetCompare3
-1928                     	xref	_TIM1_CtrlPWMOutputs
-1929                     	xref	_TIM1_Cmd
-1930                     	xref	_TIM1_OC3Init
-1931                     	xref	_TIM1_TimeBaseInit
-1932                     	xref	_TIM1_DeInit
-1933                     	xref	_ITC_SetSoftwarePriority
-1934                     	xref	_ITC_DeInit
-1935                     	xref	_GPIO_ReadInputPin
-1936                     	xref	_GPIO_Init
-1937                     	xref	_GPIO_DeInit
-1938                     	xref	_EXTI_SetTLISensitivity
-1939                     	xref	_EXTI_SetExtIntSensitivity
-1940                     	xref	_EXTI_DeInit
-1941                     	xref	_CLK_GetFlagStatus
-1942                     	xref	_CLK_SYSCLKConfig
-1943                     	xref	_CLK_HSIPrescalerConfig
-1944                     	xref	_CLK_ClockSwitchConfig
-1945                     	xref	_CLK_PeripheralClockConfig
-1946                     	xref	_CLK_ClockSwitchCmd
-1947                     	xref	_CLK_LSICmd
-1948                     	xref	_CLK_HSICmd
-1949                     	xref	_CLK_HSECmd
-1950                     	xref	_CLK_DeInit
-1951                     	switch	.const
-1952  0004               L703:
-1953  0004 3f800000      	dc.w	16256,0
-1954  0008               L772:
-1955  0008 40000000      	dc.w	16384,0
-1956                     	xref.b	c_lreg
-1957                     	xref.b	c_x
-1958                     	xref.b	c_y
-1978                     	xref	c_lsbc
-1979                     	xref	c_ldiv
-1980                     	xref	c_uitolx
-1981                     	xref	c_imul
-1982                     	xref	c_lcmp
-1983                     	xref	c_ltor
-1984                     	xref	c_ftol
-1985                     	xref	c_fsub
-1986                     	xref	c_fdiv
-1987                     	xref	c_fmul
-1988                     	xref	c_rtol
-1989                     	xref	c_itof
-1990                     	xref	c_uitof
-1991                     	xref	c_bmulx
-1992                     	xref	c_ltof
-1993                     	end
+  34  000d               _long_press:
+  35  000d 00            	dc.b	0
+  36  000e               _button_pressed:
+  37  000e 00            	dc.b	0
+  38  000f               _button_press_start:
+  39  000f 0000          	dc.w	0
+  40  0011               _button_press_duration:
+  41  0011 0000          	dc.w	0
+  42  0013               _duty_cycle_step:
+  43  0013 0000          	dc.w	0
+  44  0015               _pulse_flag:
+  45  0015 00            	dc.b	0
+  46  0016               _last_interrupt_time:
+  47  0016 0000          	dc.w	0
+  48  0018               _current_state:
+  49  0018 00            	dc.b	0
+  81                     ; 106 INTERRUPT_HANDLER(TIM4_UPD_OVF_IRQHandler, 23) {
+  82                     	switch	.text
+  83  0000               f_TIM4_UPD_OVF_IRQHandler:
+  85  0000 8a            	push	cc
+  86  0001 84            	pop	a
+  87  0002 a4bf          	and	a,#191
+  88  0004 88            	push	a
+  89  0005 86            	pop	cc
+  90  0006 3b0002        	push	c_x+2
+  91  0009 be00          	ldw	x,c_x
+  92  000b 89            	pushw	x
+  93  000c 3b0002        	push	c_y+2
+  94  000f be00          	ldw	x,c_y
+  95  0011 89            	pushw	x
+  98                     ; 107     ms_count++;  // Increment milliseconds count
+ 100  0012 be00          	ldw	x,_ms_count
+ 101  0014 5c            	incw	x
+ 102  0015 bf00          	ldw	_ms_count,x
+ 103                     ; 108     TIM4_ClearITPendingBit(TIM4_IT_UPDATE); // Clear interrupt pending bit for Timer 4
+ 105  0017 a601          	ld	a,#1
+ 106  0019 cd0000        	call	_TIM4_ClearITPendingBit
+ 108                     ; 109 }
+ 111  001c 85            	popw	x
+ 112  001d bf00          	ldw	c_y,x
+ 113  001f 320002        	pop	c_y+2
+ 114  0022 85            	popw	x
+ 115  0023 bf00          	ldw	c_x,x
+ 116  0025 320002        	pop	c_x+2
+ 117  0028 80            	iret	
+ 159                     ; 118 INTERRUPT_HANDLER(EXTI_PORTD_IRQHandler, 6) {
+ 160                     	switch	.text
+ 161  0029               f_EXTI_PORTD_IRQHandler:
+ 163  0029 8a            	push	cc
+ 164  002a 84            	pop	a
+ 165  002b a4bf          	and	a,#191
+ 166  002d 88            	push	a
+ 167  002e 86            	pop	cc
+ 168       00000002      OFST:	set	2
+ 169  002f 3b0002        	push	c_x+2
+ 170  0032 be00          	ldw	x,c_x
+ 171  0034 89            	pushw	x
+ 172  0035 3b0002        	push	c_y+2
+ 173  0038 be00          	ldw	x,c_y
+ 174  003a 89            	pushw	x
+ 175  003b 89            	pushw	x
+ 178                     ; 119 	uint16_t current_time = ms_count; // Get current time
+ 180  003c be00          	ldw	x,_ms_count
+ 181  003e 1f01          	ldw	(OFST-1,sp),x
+ 183                     ; 122 	if (current_time - last_interrupt_time < DEBOUNCE_DELAY) {
+ 185  0040 72b00016      	subw	x,_last_interrupt_time
+ 186  0044 a30032        	cpw	x,#50
+ 187  0047 253b          	jrult	L54
+ 188                     ; 123 			return; // Return if debounce delay is not elapsed
+ 190                     ; 125 	last_interrupt_time = current_time; // Update last interrupt
+ 192  0049 1e01          	ldw	x,(OFST-1,sp)
+ 193  004b bf16          	ldw	_last_interrupt_time,x
+ 194                     ; 128 	if (GPIO_ReadInputPin(GPIOD, GPIO_PIN_6) == 0) // Check if the button is pressed
+ 196  004d 8d930093      	callf	LC001
+ 197  0051 260e          	jrne	L14
+ 198                     ; 131 		if (!button_pressed)
+ 200  0053 3d0e          	tnz	_button_pressed
+ 201  0055 262d          	jrne	L54
+ 202                     ; 133 			button_pressed = 1;
+ 204  0057 3501000e      	mov	_button_pressed,#1
+ 205                     ; 134 			button_press_start = ms_count;
+ 207  005b be00          	ldw	x,_ms_count
+ 208  005d bf0f          	ldw	_button_press_start,x
+ 209  005f 2023          	jra	L54
+ 210  0061               L14:
+ 211                     ; 137 	else if (GPIO_ReadInputPin(GPIOD, GPIO_PIN_6) != 0)// When button is released, compute the duration of the press 
+ 213  0061 8d930093      	callf	LC001
+ 214  0065 271d          	jreq	L54
+ 215                     ; 139 		if (button_pressed) // Check if we reach this step with a proper button press, and not some noise event.
+ 217  0067 3d0e          	tnz	_button_pressed
+ 218  0069 2719          	jreq	L54
+ 219                     ; 141 			button_press_duration = ms_count - button_press_start; // Calculate the duration of the press.
+ 221  006b be00          	ldw	x,_ms_count
+ 222  006d 72b0000f      	subw	x,_button_press_start
+ 223  0071 bf11          	ldw	_button_press_duration,x
+ 224                     ; 143 			if (button_press_duration < LONG_PRESS_DURATION) // Short press detected
+ 226  0073 be11          	ldw	x,_button_press_duration
+ 227  0075 a305dc        	cpw	x,#1500
+ 228  0078 2404          	jruge	L35
+ 229                     ; 145 				press_count++;
+ 231  007a 3c0c          	inc	_press_count
+ 233  007c 2004          	jra	L55
+ 234  007e               L35:
+ 235                     ; 149 				long_press = 1;
+ 237  007e 3501000d      	mov	_long_press,#1
+ 238  0082               L55:
+ 239                     ; 151 			button_pressed = 0; //Release button press flag
+ 241  0082 3f0e          	clr	_button_pressed
+ 242  0084               L54:
+ 243                     ; 155 }
+ 246  0084 5b02          	addw	sp,#2
+ 247  0086 85            	popw	x
+ 248  0087 bf00          	ldw	c_y,x
+ 249  0089 320002        	pop	c_y+2
+ 250  008c 85            	popw	x
+ 251  008d bf00          	ldw	c_x,x
+ 252  008f 320002        	pop	c_x+2
+ 253  0092 80            	iret	
+ 254  0093               LC001:
+ 255  0093 4b40          	push	#64
+ 256  0095 ae500f        	ldw	x,#20495
+ 257  0098 cd0000        	call	_GPIO_ReadInputPin
+ 259  009b 5b01          	addw	sp,#1
+ 260  009d 4d            	tnz	a
+ 261  009e 87            	retf	
+ 305                     ; 158 main()
+ 305                     ; 159 {
+ 307                     	switch	.text
+ 308  009f               _main:
+ 312                     ; 161 	clock_setup();						// Configure system clock and timing
+ 314  009f cd01be        	call	_clock_setup
+ 316                     ; 162 	EXTI_setup();							// Setup external interrupts for button handling
+ 318  00a2 cd0247        	call	_EXTI_setup
+ 320                     ; 163 	enableInterrupts();				// Globally enable interrupts
+ 323  00a5 9a            	rim	
+ 325                     ; 171 	tim4_init();
+ 328  00a6 cd025f        	call	_tim4_init
+ 330                     ; 172 	delay_ms(5000);						// 5-second delay to ensure SWIM pin availability
+ 332  00a9 ae1388        	ldw	x,#5000
+ 333  00ac cd0273        	call	_delay_ms
+ 335                     ; 175 	gpio_setup();
+ 337  00af cd021e        	call	_gpio_setup
+ 339                     ; 182 	max_pwm_speed_pump = tim1_init();	
+ 341  00b2 cd03a7        	call	_tim1_init
+ 343  00b5 bf08          	ldw	_max_pwm_speed_pump,x
+ 344  00b7               L301:
+ 345                     ; 192 		switch (current_state)
+ 347  00b7 b618          	ld	a,_current_state
+ 349                     ; 374 				break;
+ 350  00b9 271c          	jreq	L75
+ 351  00bb 4a            	dec	a
+ 352  00bc 272f          	jreq	L16
+ 353  00be 4a            	dec	a
+ 354  00bf 2603cc0143    	jreq	L56
+ 355  00c4 4a            	dec	a
+ 356  00c5 2746          	jreq	L36
+ 357  00c7 4a            	dec	a
+ 358  00c8 2603cc016c    	jreq	L76
+ 359                     ; 363 			default:
+ 359                     ; 364 			
+ 359                     ; 365 				// Unexpected state: reset to SLEEP state as a failsafe
+ 359                     ; 366 				current_state = STATE_SLEEP;	// Reset to SLEEP state
+ 361  00cd 3f18          	clr	_current_state
+ 362                     ; 369 				duty_cycle_step = pump_off(duty_cycle_step);
+ 364  00cf cd01a9        	call	LC005
+ 365                     ; 370 				press_count = 0;
+ 367  00d2 3f0c          	clr	_press_count
+ 368                     ; 372 				TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
+ 370                     ; 374 				break;
+ 372  00d4 cc01a3        	jp	LC002
+ 373  00d7               L75:
+ 374                     ; 194 			case STATE_SLEEP: // Default state: minimal power consumption, awaiting wake-up
+ 374                     ; 195 				
+ 374                     ; 196 				if (duty_cycle_step != 0)
+ 376  00d7 be13          	ldw	x,_duty_cycle_step
+ 377  00d9 2703          	jreq	L311
+ 378                     ; 198 					duty_cycle_step = pump_off(duty_cycle_step);	// Ensure the pump is off in sleep state
+ 380  00db cd01a9        	call	LC005
+ 381  00de               L311:
+ 382                     ; 201 				if (press_count > 0)
+ 384  00de 3d0c          	tnz	_press_count
+ 385  00e0 27d5          	jreq	L301
+ 386                     ; 203 					current_state = STATE_IDLE;
+ 388  00e2 35010018      	mov	_current_state,#1
+ 389                     ; 204 					max_pwm_speed_LED = tim2_init();	// Initialize Timer 2 for LED PWM control during IDLE state (SWIM is disabled)
+ 391  00e6 cd0363        	call	_tim2_init
+ 393  00e9 bf0a          	ldw	_max_pwm_speed_LED,x
+ 394  00eb 20ca          	jra	L301
+ 395  00ed               L16:
+ 396                     ; 208 			case STATE_IDLE:	// Idle state: low LED brightness and pump off
+ 396                     ; 209 			
+ 396                     ; 210 				TIM2_SetCompare3(max_pwm_speed_LED/100);
+ 398  00ed cd01b1        	call	LC006
+ 399  00f0 cd0000        	call	_TIM2_SetCompare3
+ 401                     ; 211 				TIM2_SetCompare2(max_pwm_speed_LED/100);
+ 403  00f3 cd01b1        	call	LC006
+ 404  00f6 cd0000        	call	_TIM2_SetCompare2
+ 406                     ; 213 				pump_off(duty_cycle_step);	// Keep the pump turned off
+ 408  00f9 be13          	ldw	x,_duty_cycle_step
+ 409  00fb cd041d        	call	_pump_off
+ 411                     ; 216 				if (press_count > 1)
+ 413  00fe b60c          	ld	a,_press_count
+ 414  0100 a102          	cp	a,#2
+ 415  0102 2403cc018c    	jrult	L741
+ 416                     ; 218 					current_state = STATE_LOW_SPEED;
+ 418  0107 35030018      	mov	_current_state,#3
+ 419                     ; 220 					TIM2_SetCompare2(0);
+ 421                     ; 224 				if (long_press != 0)
+ 422                     ; 226 					current_state = STATE_SLEEP;
+ 423                     ; 229 					duty_cycle_step = pump_off(duty_cycle_step);					
+ 425                     ; 230 					press_count = 0;
+ 426                     ; 231 					long_press = 0;
+ 427                     ; 234 					TIM2_SetCompare2(0);
+ 429                     ; 235 					TIM2_SetCompare3(0);
+ 431                     ; 237 					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
+ 433  010b 207b          	jp	LC004
+ 434  010d               L36:
+ 435                     ; 242 			case STATE_LOW_SPEED:	// Reduced pump speed with moderate LED brightness
+ 435                     ; 243 				
+ 435                     ; 244 				// Set LED brightness to 1% of maximum
+ 435                     ; 245 				TIM2_SetCompare3(max_pwm_speed_LED/100);
+ 437  010d cd01b1        	call	LC006
+ 438  0110 cd0000        	call	_TIM2_SetCompare3
+ 440                     ; 248 				if (duty_cycle_step > (max_pwm_speed_pump/3)*2)
+ 442  0113 cd01b7        	call	LC007
+ 443  0116 b313          	cpw	x,_duty_cycle_step
+ 444  0118 2407          	jruge	L321
+ 445                     ; 250 					duty_cycle_step = decelerate_pump(duty_cycle_step);
+ 447  011a be13          	ldw	x,_duty_cycle_step
+ 448  011c cd0402        	call	_decelerate_pump
+ 451  011f 2014          	jra	L521
+ 452  0121               L321:
+ 453                     ; 252 				else if (duty_cycle_step < (max_pwm_speed_pump/3)*2)
+ 455  0121 cd01b7        	call	LC007
+ 456  0124 b313          	cpw	x,_duty_cycle_step
+ 457  0126 2307          	jrule	L721
+ 458                     ; 254 					duty_cycle_step = accelerate_pump(duty_cycle_step);
+ 460  0128 be13          	ldw	x,_duty_cycle_step
+ 461  012a cd03f0        	call	_accelerate_pump
+ 464  012d 2006          	jra	L521
+ 465  012f               L721:
+ 466                     ; 258 					duty_cycle_step = set_pump_speed((max_pwm_speed_pump/3)*2);	// Maintain 2/3 speed
+ 468  012f cd01b7        	call	LC007
+ 469  0132 cd0414        	call	_set_pump_speed
+ 471  0135               L521:
+ 472  0135 bf13          	ldw	_duty_cycle_step,x
+ 473                     ; 262 				if (press_count > 2)
+ 475  0137 b60c          	ld	a,_press_count
+ 476  0139 a103          	cp	a,#3
+ 477  013b 254f          	jrult	L741
+ 478                     ; 264 					current_state = STATE_FULL_SPEED;
+ 480  013d 35020018      	mov	_current_state,#2
+ 481                     ; 268 				if (long_press != 0)
+ 482                     ; 270 					current_state = STATE_SLEEP;
+ 483                     ; 273 					duty_cycle_step = pump_off(duty_cycle_step);					
+ 485                     ; 274 					press_count = 0;
+ 486                     ; 275 					long_press = 0;
+ 487                     ; 278 					TIM2_SetCompare2(0);
+ 489                     ; 279 					TIM2_SetCompare3(0);
+ 491                     ; 281 					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
+ 493  0141 2049          	jp	L741
+ 494  0143               L56:
+ 495                     ; 285 			case STATE_FULL_SPEED:	// Full pump speed and LED brightness
+ 495                     ; 286 				
+ 495                     ; 287 				// Set LED to maximum brightness
+ 495                     ; 288 				TIM2_SetCompare3(max_pwm_speed_LED/100);
+ 497  0143 ad6c          	call	LC006
+ 498  0145 cd0000        	call	_TIM2_SetCompare3
+ 500                     ; 291 				if (duty_cycle_step < max_pwm_speed_pump)
+ 502  0148 be13          	ldw	x,_duty_cycle_step
+ 503  014a b308          	cpw	x,_max_pwm_speed_pump
+ 504  014c 2407          	jruge	L731
+ 505                     ; 293 					duty_cycle_step = accelerate_pump(duty_cycle_step);
+ 507  014e be13          	ldw	x,_duty_cycle_step
+ 508  0150 cd03f0        	call	_accelerate_pump
+ 511  0153 2005          	jra	L141
+ 512  0155               L731:
+ 513                     ; 297 					duty_cycle_step = set_pump_speed(max_pwm_speed_pump);	// Maintain max speed
+ 515  0155 be08          	ldw	x,_max_pwm_speed_pump
+ 516  0157 cd0414        	call	_set_pump_speed
+ 518  015a               L141:
+ 519  015a bf13          	ldw	_duty_cycle_step,x
+ 520                     ; 301 				if (press_count > 3)
+ 522  015c b60c          	ld	a,_press_count
+ 523  015e a104          	cp	a,#4
+ 524  0160 252a          	jrult	L741
+ 525                     ; 303 					current_state = STATE_PULSE;
+ 527  0162 35040018      	mov	_current_state,#4
+ 528                     ; 304 					TIM2_SetCompare3(0);	// Turn off the STRONG/WEAK LEDs					
+ 530  0166 5f            	clrw	x
+ 531  0167 cd0000        	call	_TIM2_SetCompare3
+ 533                     ; 308 				if (long_press != 0)
+ 534                     ; 310 					current_state = STATE_SLEEP;
+ 535                     ; 313 					duty_cycle_step = pump_off(duty_cycle_step);					
+ 537                     ; 314 					press_count = 0;
+ 538                     ; 315 					long_press = 0;
+ 539                     ; 318 					TIM2_SetCompare2(0);
+ 541                     ; 319 					TIM2_SetCompare3(0);
+ 543                     ; 321 					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
+ 545  016a 2020          	jp	L741
+ 546  016c               L76:
+ 547                     ; 325 			case STATE_PULSE:	// Pulsed pump operation with LED indication
+ 547                     ; 326 			
+ 547                     ; 327 				// Set LED PULSE to 1% brightnes
+ 547                     ; 328 				TIM2_SetCompare2(max_pwm_speed_LED/100);
+ 549  016c ad43          	call	LC006
+ 550  016e cd0000        	call	_TIM2_SetCompare2
+ 552                     ; 331 				duty_cycle_step = pump_smooth_on_off(duty_cycle_step);
+ 554  0171 be13          	ldw	x,_duty_cycle_step
+ 555  0173 cd042e        	call	_pump_smooth_on_off
+ 557  0176 bf13          	ldw	_duty_cycle_step,x
+ 558                     ; 334 				if (press_count > 4)
+ 560  0178 b60c          	ld	a,_press_count
+ 561  017a a105          	cp	a,#5
+ 562  017c 250e          	jrult	L741
+ 563                     ; 336 					current_state = STATE_LOW_SPEED;	// Reset to SLEEP state
+ 565  017e 35030018      	mov	_current_state,#3
+ 566                     ; 339 					duty_cycle_step = pump_off(duty_cycle_step);
+ 568  0182 ad25          	call	LC005
+ 569                     ; 340 					press_count = 2;
+ 571  0184 3502000c      	mov	_press_count,#2
+ 572                     ; 342 					TIM2_SetCompare2(0);	// Turn off LED PULSE				
+ 574  0188               LC004:
+ 576  0188 5f            	clrw	x
+ 577  0189 cd0000        	call	_TIM2_SetCompare2
+ 579  018c               L741:
+ 580                     ; 346 				if (long_press != 0)
+ 582                     ; 348 					current_state = STATE_SLEEP;
+ 584                     ; 351 					duty_cycle_step = pump_off(duty_cycle_step);					
+ 587                     ; 352 					press_count = 0;
+ 589                     ; 353 					long_press = 0;
+ 591                     ; 356 					TIM2_SetCompare2(0);
+ 594                     ; 357 					TIM2_SetCompare3(0);
+ 599  018c 3d0d          	tnz	_long_press
+ 600  018e 2603cc00b7    	jreq	L301
+ 604  0193 3f18          	clr	_current_state
+ 608  0195 ad12          	call	LC005
+ 612  0197 3f0c          	clr	_press_count
+ 616  0199 3f0d          	clr	_long_press
+ 620  019b 5f            	clrw	x
+ 621  019c cd0000        	call	_TIM2_SetCompare2
+ 625  019f 5f            	clrw	x
+ 626  01a0 cd0000        	call	_TIM2_SetCompare3
+ 628                     ; 359 					TIM2_DeInit();				// Deinitialize Timer 2 to re-enable SWIM
+ 630  01a3               LC002:
+ 635  01a3 cd0000        	call	_TIM2_DeInit
+ 637  01a6 cc00b7        	jra	L301
+ 638                     ; 374 				break;
+ 639  01a9               LC005:
+ 640  01a9 be13          	ldw	x,_duty_cycle_step
+ 641  01ab cd041d        	call	_pump_off
+ 642  01ae bf13          	ldw	_duty_cycle_step,x
+ 643  01b0 81            	ret	
+ 644  01b1               LC006:
+ 645  01b1 be0a          	ldw	x,_max_pwm_speed_LED
+ 646  01b3 a664          	ld	a,#100
+ 647  01b5 62            	div	x,a
+ 648  01b6 81            	ret	
+ 649  01b7               LC007:
+ 650  01b7 be08          	ldw	x,_max_pwm_speed_pump
+ 651  01b9 a603          	ld	a,#3
+ 652  01bb 62            	div	x,a
+ 653  01bc 58            	sllw	x
+ 654  01bd 81            	ret	
+ 687                     ; 386 void clock_setup(void)
+ 687                     ; 387 {
+ 688                     	switch	.text
+ 689  01be               _clock_setup:
+ 693                     ; 388 	CLK_DeInit();		// Reset clock configuration to default state
+ 695  01be cd0000        	call	_CLK_DeInit
+ 697                     ; 390 	CLK_HSECmd(DISABLE);  // Disable external high-speed clock
+ 699  01c1 4f            	clr	a
+ 700  01c2 cd0000        	call	_CLK_HSECmd
+ 702                     ; 391 	CLK_LSICmd(DISABLE);  // Disable low-speed internal clock
+ 704  01c5 4f            	clr	a
+ 705  01c6 cd0000        	call	_CLK_LSICmd
+ 707                     ; 392 	CLK_HSICmd(ENABLE);   // Enable internal high-speed clock (16 MHz)
+ 709  01c9 a601          	ld	a,#1
+ 710  01cb cd0000        	call	_CLK_HSICmd
+ 713  01ce               L561:
+ 714                     ; 394 	while(CLK_GetFlagStatus(CLK_FLAG_HSIRDY) == FALSE);	// Wait until HSI clock is stable
+ 716  01ce ae0102        	ldw	x,#258
+ 717  01d1 cd0000        	call	_CLK_GetFlagStatus
+ 719  01d4 4d            	tnz	a
+ 720  01d5 27f7          	jreq	L561
+ 721                     ; 396 	CLK_ClockSwitchCmd(ENABLE);  // Enable automatic clock switching
+ 723  01d7 a601          	ld	a,#1
+ 724  01d9 cd0000        	call	_CLK_ClockSwitchCmd
+ 726                     ; 397 	CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);  // Set HSI clock prescaler (Peripheral Clock = 16 MHz)
+ 728  01dc 4f            	clr	a
+ 729  01dd cd0000        	call	_CLK_HSIPrescalerConfig
+ 731                     ; 398 	CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);  // Set CPU clock prescaler (CPU Clock = 16 MHz)
+ 733  01e0 a680          	ld	a,#128
+ 734  01e2 cd0000        	call	_CLK_SYSCLKConfig
+ 736                     ; 400 	CLK_ClockSwitchConfig(CLK_SWITCHMODE_AUTO, CLK_SOURCE_HSI, 
+ 736                     ; 401 	DISABLE, CLK_CURRENTCLOCKSTATE_ENABLE);
+ 738  01e5 4b01          	push	#1
+ 739  01e7 4b00          	push	#0
+ 740  01e9 ae01e1        	ldw	x,#481
+ 741  01ec cd0000        	call	_CLK_ClockSwitchConfig
+ 743  01ef 85            	popw	x
+ 744                     ; 404 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_I2C, DISABLE);
+ 746  01f0 5f            	clrw	x
+ 747  01f1 cd0000        	call	_CLK_PeripheralClockConfig
+ 749                     ; 405 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_SPI, DISABLE);
+ 751  01f4 ae0100        	ldw	x,#256
+ 752  01f7 cd0000        	call	_CLK_PeripheralClockConfig
+ 754                     ; 406 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_ADC, DISABLE);
+ 756  01fa ae1300        	ldw	x,#4864
+ 757  01fd cd0000        	call	_CLK_PeripheralClockConfig
+ 759                     ; 407 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_AWU, DISABLE);
+ 761  0200 ae1200        	ldw	x,#4608
+ 762  0203 cd0000        	call	_CLK_PeripheralClockConfig
+ 764                     ; 408 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_UART1, DISABLE);	
+ 766  0206 ae0300        	ldw	x,#768
+ 767  0209 cd0000        	call	_CLK_PeripheralClockConfig
+ 769                     ; 409 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER1, ENABLE);  // Enable Timer 1 for PWM generation
+ 771  020c ae0701        	ldw	x,#1793
+ 772  020f cd0000        	call	_CLK_PeripheralClockConfig
+ 774                     ; 410 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER2, ENABLE);  // Enable Timer 2 for PWM generation
+ 776  0212 ae0501        	ldw	x,#1281
+ 777  0215 cd0000        	call	_CLK_PeripheralClockConfig
+ 779                     ; 411 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER4, ENABLE);  // Enable Timer 4 for delay function
+ 781  0218 ae0401        	ldw	x,#1025
+ 783                     ; 413 }
+ 786  021b cc0000        	jp	_CLK_PeripheralClockConfig
+ 811                     ; 422 void gpio_setup(void)
+ 811                     ; 423 {
+ 812                     	switch	.text
+ 813  021e               _gpio_setup:
+ 817                     ; 424 	GPIO_DeInit(GPIOA);  // Reset Port A configuration
+ 819  021e ae5000        	ldw	x,#20480
+ 820  0221 cd0000        	call	_GPIO_DeInit
+ 822                     ; 425 	GPIO_DeInit(GPIOB);  // Reset Port B configuration
+ 824  0224 ae5005        	ldw	x,#20485
+ 825  0227 cd0000        	call	_GPIO_DeInit
+ 827                     ; 426 	GPIO_DeInit(GPIOD);  // Reset Port D configuration
+ 829  022a ae500f        	ldw	x,#20495
+ 830  022d cd0000        	call	_GPIO_DeInit
+ 832                     ; 428 	GPIO_Init(GPIOD, GPIO_PIN_6, GPIO_MODE_IN_FL_IT);					// Configure Pin D6 as an floating input with interrupt
+ 834  0230 4b20          	push	#32
+ 835  0232 4b40          	push	#64
+ 836  0234 ae500f        	ldw	x,#20495
+ 837  0237 cd0000        	call	_GPIO_Init
+ 839  023a 85            	popw	x
+ 840                     ; 429 	GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_PP_LOW_FAST);	// Configure Pin B4 as push-pull output with fast response
+ 842  023b 4be0          	push	#224
+ 843  023d 4b10          	push	#16
+ 844  023f ae5005        	ldw	x,#20485
+ 845  0242 cd0000        	call	_GPIO_Init
+ 847  0245 85            	popw	x
+ 848                     ; 430 }
+ 851  0246 81            	ret	
+ 880                     ; 439 void EXTI_setup(void)
+ 880                     ; 440 {
+ 881                     	switch	.text
+ 882  0247               _EXTI_setup:
+ 886                     ; 441 	ITC_DeInit();	// Reset interrupt controller configuration
+ 888  0247 cd0000        	call	_ITC_DeInit
+ 890                     ; 442 	ITC_SetSoftwarePriority(ITC_IRQ_PORTD, ITC_PRIORITYLEVEL_0); 	// Set Port D interrupt priority to level 0 (lowest)
+ 892  024a ae0602        	ldw	x,#1538
+ 893  024d cd0000        	call	_ITC_SetSoftwarePriority
+ 895                     ; 444 	EXTI_DeInit(); // Reset external interrupt configuration
+ 897  0250 cd0000        	call	_EXTI_DeInit
+ 899                     ; 446 	EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOD, EXTI_SENSITIVITY_RISE_FALL);  // Enable falling and rising-edge sensitivity for Port D
+ 901  0253 ae0303        	ldw	x,#771
+ 902  0256 cd0000        	call	_EXTI_SetExtIntSensitivity
+ 904                     ; 447 	EXTI_SetTLISensitivity(EXTI_TLISENSITIVITY_FALL_ONLY);  // Set TLI sensitivity to falling-edge
+ 906  0259 4f            	clr	a
+ 907  025a cd0000        	call	_EXTI_SetTLISensitivity
+ 909                     ; 449 	enableInterrupts();	// Enable global interrupts. Do nothing if already enabled
+ 912  025d 9a            	rim	
+ 914                     ; 450 }
+ 918  025e 81            	ret	
+ 945                     ; 459 void tim4_init(void) //Timer Used to count milliseconds for delay function
+ 945                     ; 460 {
+ 946                     	switch	.text
+ 947  025f               _tim4_init:
+ 951                     ; 462 	TIM4_DeInit();	// Reset Timer 4 configuration
+ 953  025f cd0000        	call	_TIM4_DeInit
+ 955                     ; 463 	TIM4_TimeBaseInit(TIM4_PRESCALER_128, 125); // Set prescaler to 128 and set ARR to 125 (1 ms period). CLK_PRESCALER_HSIDIV1/TIM4_PRESCALER_128 => F_TIM4 = 125kHz. Counter needs to reach 125 to get 1ms.
+ 957  0262 ae077d        	ldw	x,#1917
+ 958  0265 cd0000        	call	_TIM4_TimeBaseInit
+ 960                     ; 464 	TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);  // Enable update interrupt
+ 962  0268 ae0101        	ldw	x,#257
+ 963  026b cd0000        	call	_TIM4_ITConfig
+ 965                     ; 465 	TIM4_Cmd(ENABLE);  // Start Timer 4
+ 967  026e a601          	ld	a,#1
+ 969                     ; 467 }
+ 972  0270 cc0000        	jp	_TIM4_Cmd
+1016                     ; 477 void delay_ms(uint16_t delay)
+1016                     ; 478 {
+1017                     	switch	.text
+1018  0273               _delay_ms:
+1020  0273 89            	pushw	x
+1021  0274 89            	pushw	x
+1022       00000002      OFST:	set	2
+1025                     ; 479     uint16_t start = ms_count;	// Record the current timer count
+1027  0275 be00          	ldw	x,_ms_count
+1028  0277 1f01          	ldw	(OFST-1,sp),x
+1031  0279               L742:
+1032                     ; 480     while ((ms_count - start) < delay);	// Wait until the delay period has elapsed
+1034  0279 be00          	ldw	x,_ms_count
+1035  027b 72f001        	subw	x,(OFST-1,sp)
+1036  027e 1303          	cpw	x,(OFST+1,sp)
+1037  0280 25f7          	jrult	L742
+1038                     ; 482 }
+1041  0282 5b04          	addw	sp,#4
+1042  0284 81            	ret	
+1113                     .const:	section	.text
+1114  0000               L462:
+1115  0000 00010000      	dc.l	65536
+1116                     ; 498 uint16_t set_pwm_frequency(uint8_t timer, uint16_t frequency, uint8_t hsi_prescaler, uint8_t timx_prescaler)
+1116                     ; 499 {
+1117                     	switch	.text
+1118  0285               _set_pwm_frequency:
+1120  0285 88            	push	a
+1121  0286 520c          	subw	sp,#12
+1122       0000000c      OFST:	set	12
+1125                     ; 500 	uint32_t arr = 0; //uint32_t to avoid 16-bit overflow
+1127                     ; 501 	switch (hsi_prescaler)
+1129  0288 7b12          	ld	a,(OFST+6,sp)
+1131                     ; 517 			break;
+1132  028a 270e          	jreq	L352
+1133  028c a008          	sub	a,#8
+1134  028e 270d          	jreq	L552
+1135  0290 a008          	sub	a,#8
+1136  0292 270d          	jreq	L752
+1137  0294 a008          	sub	a,#8
+1138  0296 270d          	jreq	L162
+1139  0298 200f          	jra	L323
+1140  029a               L352:
+1141                     ; 503 		case 0x00:
+1141                     ; 504 			hsi_prescaler = 1;
+1143  029a 4c            	inc	a
+1144                     ; 505 			break;
+1146  029b 200a          	jp	LC008
+1147  029d               L552:
+1148                     ; 507 		case 0x08:
+1148                     ; 508 			hsi_prescaler = 2;
+1150  029d a602          	ld	a,#2
+1151                     ; 509 			break;
+1153  029f 2006          	jp	LC008
+1154  02a1               L752:
+1155                     ; 511 		case 0x10:
+1155                     ; 512 			hsi_prescaler = 4;
+1157  02a1 a604          	ld	a,#4
+1158                     ; 513 			break;
+1160  02a3 2002          	jp	LC008
+1161  02a5               L162:
+1162                     ; 515 		case 0x18:
+1162                     ; 516 			hsi_prescaler = 8;
+1164  02a5 a608          	ld	a,#8
+1165  02a7               LC008:
+1166  02a7 6b12          	ld	(OFST+6,sp),a
+1167                     ; 517 			break;
+1169  02a9               L323:
+1170                     ; 520 	if (timer !=  1)
+1172  02a9 7b0d          	ld	a,(OFST+1,sp)
+1173  02ab 4a            	dec	a
+1174  02ac 275f          	jreq	L523
+1175                     ; 522 		arr = (HSI_FREQ/(frequency*hsi_prescaler*(pow(2, timx_prescaler))))-1;
+1192  02ae 2005          	jra	L353
+1193  02b0               L743:
+1194                     ; 526 			frequency++;
+1196  02b0 1e10          	ldw	x,(OFST+4,sp)
+1197  02b2 5c            	incw	x
+1198  02b3 1f10          	ldw	(OFST+4,sp),x
+1199                     ; 527 			arr = (HSI_FREQ/(frequency*hsi_prescaler*(pow(2, timx_prescaler))))-1;		
+1216  02b5               L353:
+1218  02b5 7b13          	ld	a,(OFST+7,sp)
+1219  02b7 5f            	clrw	x
+1220  02b8 97            	ld	xl,a
+1221  02b9 cd0000        	call	c_itof
+1222  02bc be02          	ldw	x,c_lreg+2
+1223  02be 89            	pushw	x
+1224  02bf be00          	ldw	x,c_lreg
+1225  02c1 89            	pushw	x
+1226  02c2 ce000a        	ldw	x,L333+2
+1227  02c5 89            	pushw	x
+1228  02c6 ce0008        	ldw	x,L333
+1229  02c9 89            	pushw	x
+1230  02ca cd0000        	call	_pow
+1231  02cd 5b08          	addw	sp,#8
+1232  02cf 96            	ldw	x,sp
+1233  02d0 1c0005        	addw	x,#OFST-7
+1234  02d3 cd0000        	call	c_rtol
+1235  02d6 1e10          	ldw	x,(OFST+4,sp)
+1236  02d8 7b12          	ld	a,(OFST+6,sp)
+1237  02da cd0000        	call	c_bmulx
+1238  02dd cd0000        	call	c_uitof
+1239  02e0 96            	ldw	x,sp
+1240  02e1 1c0005        	addw	x,#OFST-7
+1241  02e4 cd0000        	call	c_fmul
+1242  02e7 96            	ldw	x,sp
+1243  02e8 5c            	incw	x
+1244  02e9 ad5e          	call	LC009
+1245  02eb cd0000        	call	c_ltof
+1246  02ee 96            	ldw	x,sp
+1247  02ef 5c            	incw	x
+1248  02f0 cd0000        	call	c_fdiv
+1249  02f3 ae0004        	ldw	x,#L343
+1250  02f6 cd0000        	call	c_fsub
+1251  02f9 cd0000        	call	c_ftol
+1252  02fc 96            	ldw	x,sp
+1253  02fd 1c0009        	addw	x,#OFST-3
+1254  0300 cd0000        	call	c_rtol
+1255                     ; 524 		while (arr > 65535) //Ajust Frequency to get it back into ARR 16-bit limit.
+1257  0303 96            	ldw	x,sp
+1258  0304 ad51          	call	LC010
+1260  0306 24a8          	jruge	L743
+1262  0308               L753:
+1263                     ; 542 	return (uint16_t)arr;
+1265  0308 1e0b          	ldw	x,(OFST-1,sp)
+1268  030a 5b0d          	addw	sp,#13
+1269  030c 81            	ret	
+1270  030d               L523:
+1271                     ; 532 		arr = (HSI_FREQ/(frequency*hsi_prescaler*(timx_prescaler + 1)))-1;
+1273  030d 1e10          	ldw	x,(OFST+4,sp)
+1284  030f 2005          	jra	L563
+1285  0311               L163:
+1286                     ; 536 			frequency++;
+1288  0311 1e10          	ldw	x,(OFST+4,sp)
+1289  0313 5c            	incw	x
+1290  0314 1f10          	ldw	(OFST+4,sp),x
+1291                     ; 537 			arr = (HSI_FREQ/(frequency*hsi_prescaler*(timx_prescaler + 1)))-1;		
+1302  0316               L563:
+1303  0316 7b12          	ld	a,(OFST+6,sp)
+1304  0318 cd0000        	call	c_bmulx
+1305  031b 7b13          	ld	a,(OFST+7,sp)
+1306  031d 905f          	clrw	y
+1307  031f 9097          	ld	yl,a
+1308  0321 905c          	incw	y
+1309  0323 cd0000        	call	c_imul
+1310  0326 cd0000        	call	c_uitolx
+1311  0329 96            	ldw	x,sp
+1312  032a 1c0005        	addw	x,#OFST-7
+1313  032d ad1a          	call	LC009
+1314  032f 96            	ldw	x,sp
+1315  0330 1c0005        	addw	x,#OFST-7
+1316  0333 cd0000        	call	c_ldiv
+1317  0336 a601          	ld	a,#1
+1318  0338 cd0000        	call	c_lsbc
+1319  033b 96            	ldw	x,sp
+1320  033c 1c0009        	addw	x,#OFST-3
+1321  033f cd0000        	call	c_rtol
+1322                     ; 534 		while (arr > 65535) //Adjust PWM Frequency so ARR is not out of range.
+1324  0342 96            	ldw	x,sp
+1325  0343 ad12          	call	LC010
+1327  0345 24ca          	jruge	L163
+1328  0347 20bf          	jra	L753
+1329  0349               LC009:
+1330  0349 cd0000        	call	c_rtol
+1331  034c ae2400        	ldw	x,#9216
+1332  034f bf02          	ldw	c_lreg+2,x
+1333  0351 ae00f4        	ldw	x,#244
+1334  0354 bf00          	ldw	c_lreg,x
+1335  0356 81            	ret	
+1336  0357               LC010:
+1337  0357 1c0009        	addw	x,#OFST-3
+1338  035a cd0000        	call	c_ltor
+1340  035d ae0000        	ldw	x,#L462
+1341  0360 cc0000        	jp	c_lcmp
+1382                     ; 553 uint16_t tim2_init(void)
+1382                     ; 554 {
+1383                     	switch	.text
+1384  0363               _tim2_init:
+1386  0363 89            	pushw	x
+1387       00000002      OFST:	set	2
+1390                     ; 556 	uint16_t ARR = set_pwm_frequency(TIMER_2, TIM2_CH3_FREQ, CLK_PRESCALER_HSIDIV1, TIM2_PRESCALER_1);
+1392  0364 4b00          	push	#0
+1393  0366 4b00          	push	#0
+1394  0368 ae4e20        	ldw	x,#20000
+1395  036b 89            	pushw	x
+1396  036c a602          	ld	a,#2
+1397  036e cd0285        	call	_set_pwm_frequency
+1399  0371 5b04          	addw	sp,#4
+1400  0373 1f01          	ldw	(OFST-1,sp),x
+1402                     ; 559 	OCR = 0;
+1404  0375 5f            	clrw	x
+1405  0376 bf02          	ldw	_OCR,x
+1406                     ; 562 	TIM2_DeInit();
+1408  0378 cd0000        	call	_TIM2_DeInit
+1410                     ; 565 	TIM2_TimeBaseInit(TIM2_PRESCALER_1, ARR); //Set TIM2 Prescaler and period (in number of ticks) Note: ARRmax = 65535 (Adjust prescaler to get the correct pwm frequency)
+1412  037b 1e01          	ldw	x,(OFST-1,sp)
+1413  037d 89            	pushw	x
+1414  037e 4f            	clr	a
+1415  037f cd0000        	call	_TIM2_TimeBaseInit
+1417  0382 85            	popw	x
+1418                     ; 568 	TIM2_OC3Init(TIM2_OCMODE_PWM1, TIM2_OUTPUTSTATE_ENABLE, OCR, TIM2_OCPOLARITY_HIGH); // For LED_STRONG
+1420  0383 4b00          	push	#0
+1421  0385 be02          	ldw	x,_OCR
+1422  0387 89            	pushw	x
+1423  0388 ae6011        	ldw	x,#24593
+1424  038b cd0000        	call	_TIM2_OC3Init
+1426  038e 5b03          	addw	sp,#3
+1427                     ; 569 	TIM2_OC2Init(TIM2_OCMODE_PWM1, TIM2_OUTPUTSTATE_ENABLE, OCR, TIM2_OCPOLARITY_HIGH); // For LED_PULSE
+1429  0390 4b00          	push	#0
+1430  0392 be02          	ldw	x,_OCR
+1431  0394 89            	pushw	x
+1432  0395 ae6011        	ldw	x,#24593
+1433  0398 cd0000        	call	_TIM2_OC2Init
+1435  039b 5b03          	addw	sp,#3
+1436                     ; 572 	TIM2_Cmd(ENABLE);
+1438  039d a601          	ld	a,#1
+1439  039f cd0000        	call	_TIM2_Cmd
+1441                     ; 575 	return ARR;
+1443  03a2 1e01          	ldw	x,(OFST-1,sp)
+1446  03a4 5b02          	addw	sp,#2
+1447  03a6 81            	ret	
+1488                     ; 589 uint16_t tim1_init(void)
+1488                     ; 590 {
+1489                     	switch	.text
+1490  03a7               _tim1_init:
+1492  03a7 89            	pushw	x
+1493       00000002      OFST:	set	2
+1496                     ; 592 	uint16_t ARR = set_pwm_frequency(TIMER_1, TIM1_CH3_FREQ, CLK_PRESCALER_HSIDIV1, TIM1_PRESCALER_1);
+1498  03a8 4b00          	push	#0
+1499  03aa 4b00          	push	#0
+1500  03ac ae4e20        	ldw	x,#20000
+1501  03af 89            	pushw	x
+1502  03b0 a601          	ld	a,#1
+1503  03b2 cd0285        	call	_set_pwm_frequency
+1505  03b5 5b04          	addw	sp,#4
+1506  03b7 1f01          	ldw	(OFST-1,sp),x
+1508                     ; 595 	OCR = 0; //Enable PWM but force it Low to avoid driving things unintentionally
+1510  03b9 5f            	clrw	x
+1511  03ba bf02          	ldw	_OCR,x
+1512                     ; 598 	TIM1_DeInit();
+1514  03bc cd0000        	call	_TIM1_DeInit
+1516                     ; 601 	TIM1_TimeBaseInit(TIM1_PRESCALER_1, TIM1_COUNTERMODE_UP, ARR, TIM1_REP_COUNTER);
+1518  03bf 4b00          	push	#0
+1519  03c1 1e02          	ldw	x,(OFST+0,sp)
+1520  03c3 89            	pushw	x
+1521  03c4 4b00          	push	#0
+1522  03c6 5f            	clrw	x
+1523  03c7 cd0000        	call	_TIM1_TimeBaseInit
+1525  03ca 5b04          	addw	sp,#4
+1526                     ; 604 	TIM1_OC3Init(TIM1_OCMODE_PWM1,TIM1_OUTPUTSTATE_ENABLE, TIM1_OUTPUTNSTATE_DISABLE, OCR, TIM1_OCPOLARITY_HIGH, TIM1_OCNPOLARITY_LOW, TIM1_OCIDLESTATE_RESET, TIM1_OCNIDLESTATE_RESET);
+1528  03cc 4b00          	push	#0
+1529  03ce 4b00          	push	#0
+1530  03d0 4b88          	push	#136
+1531  03d2 4b00          	push	#0
+1532  03d4 be02          	ldw	x,_OCR
+1533  03d6 89            	pushw	x
+1534  03d7 4b00          	push	#0
+1535  03d9 ae6011        	ldw	x,#24593
+1536  03dc cd0000        	call	_TIM1_OC3Init
+1538  03df 5b07          	addw	sp,#7
+1539                     ; 607 	TIM1_Cmd(ENABLE);
+1541  03e1 a601          	ld	a,#1
+1542  03e3 cd0000        	call	_TIM1_Cmd
+1544                     ; 610 	TIM1_CtrlPWMOutputs(ENABLE);
+1546  03e6 a601          	ld	a,#1
+1547  03e8 cd0000        	call	_TIM1_CtrlPWMOutputs
+1549                     ; 613 	return ARR;
+1551  03eb 1e01          	ldw	x,(OFST-1,sp)
+1554  03ed 5b02          	addw	sp,#2
+1555  03ef 81            	ret	
+1591                     ; 627 uint16_t accelerate_pump(uint16_t duty_cycle_step)
+1591                     ; 628 {	
+1592                     	switch	.text
+1593  03f0               _accelerate_pump:
+1595  03f0 89            	pushw	x
+1596       00000000      OFST:	set	0
+1599                     ; 629 	delay_ms(1); // Short delay to smooth out the ramp-up.
+1601  03f1 ae0001        	ldw	x,#1
+1602  03f4 cd0273        	call	_delay_ms
+1604                     ; 630 	TIM1_SetCompare3(duty_cycle_step); // Update the PWM duty cycle.
+1606  03f7 1e01          	ldw	x,(OFST+1,sp)
+1607  03f9 cd0000        	call	_TIM1_SetCompare3
+1609                     ; 631 	duty_cycle_step++; // Increment the duty cycle value.
+1611  03fc 1e01          	ldw	x,(OFST+1,sp)
+1612  03fe 5c            	incw	x
+1613                     ; 633 	return duty_cycle_step; // Return the updated duty cycle.
+1617  03ff 5b02          	addw	sp,#2
+1618  0401 81            	ret	
+1654                     ; 646 uint16_t decelerate_pump(uint16_t duty_cycle_step)
+1654                     ; 647 {	
+1655                     	switch	.text
+1656  0402               _decelerate_pump:
+1658  0402 89            	pushw	x
+1659       00000000      OFST:	set	0
+1662                     ; 648 	delay_ms(1); // Short delay to smooth out the ramp-down.
+1664  0403 ae0001        	ldw	x,#1
+1665  0406 cd0273        	call	_delay_ms
+1667                     ; 649 	TIM1_SetCompare3(duty_cycle_step); // Update the PWM duty cycle.
+1669  0409 1e01          	ldw	x,(OFST+1,sp)
+1670  040b cd0000        	call	_TIM1_SetCompare3
+1672                     ; 650 	duty_cycle_step--; // Decrement the duty cycle value.
+1674  040e 1e01          	ldw	x,(OFST+1,sp)
+1675  0410 5a            	decw	x
+1676                     ; 652 	return duty_cycle_step; // Return the updated duty cycle.
+1680  0411 5b02          	addw	sp,#2
+1681  0413 81            	ret	
+1716                     ; 664 uint16_t set_pump_speed(uint16_t duty_cycle_step)
+1716                     ; 665 {	
+1717                     	switch	.text
+1718  0414               _set_pump_speed:
+1720  0414 89            	pushw	x
+1721       00000000      OFST:	set	0
+1724                     ; 666 	TIM1_SetCompare3(duty_cycle_step); // Set the PWM duty cycle to the specified value.
+1726  0415 cd0000        	call	_TIM1_SetCompare3
+1728                     ; 667 	return duty_cycle_step; // Return the specified duty cycle.
+1730  0418 1e01          	ldw	x,(OFST+1,sp)
+1733  041a 5b02          	addw	sp,#2
+1734  041c 81            	ret	
+1770                     ; 682 uint16_t pump_off(uint16_t duty_cycle_step)
+1770                     ; 683 {
+1771                     	switch	.text
+1772  041d               _pump_off:
+1774  041d 89            	pushw	x
+1775       00000000      OFST:	set	0
+1778                     ; 684 	if (duty_cycle_step > 0)
+1780  041e 5d            	tnzw	x
+1781  041f 2704          	jreq	L515
+1782                     ; 687 		duty_cycle_step = decelerate_pump(duty_cycle_step);
+1784  0421 addf          	call	_decelerate_pump
+1787  0423 2006          	jra	L715
+1788  0425               L515:
+1789                     ; 692 		TIM1_SetCompare3(0);
+1791  0425 5f            	clrw	x
+1792  0426 cd0000        	call	_TIM1_SetCompare3
+1794  0429 1e01          	ldw	x,(OFST+1,sp)
+1795  042b               L715:
+1796                     ; 695 	return duty_cycle_step;
+1800  042b 5b02          	addw	sp,#2
+1801  042d 81            	ret	
+1839                     ; 711 uint16_t pump_smooth_on_off(uint16_t duty_cycle_step)
+1839                     ; 712 {
+1840                     	switch	.text
+1841  042e               _pump_smooth_on_off:
+1843  042e 89            	pushw	x
+1844       00000000      OFST:	set	0
+1847                     ; 714 	if ((duty_cycle_step < max_pwm_speed_pump) && (pulse_flag == 0))
+1849  042f b308          	cpw	x,_max_pwm_speed_pump
+1850  0431 240a          	jruge	L735
+1852  0433 3d15          	tnz	_pulse_flag
+1853  0435 2606          	jrne	L735
+1854                     ; 716 		duty_cycle_step = accelerate_pump(duty_cycle_step);				// Increase the duty cycle			
+1856  0437 adb7          	call	_accelerate_pump
+1858  0439 1f01          	ldw	(OFST+1,sp),x
+1860  043b 2004          	jra	L145
+1861  043d               L735:
+1862                     ; 720 		pulse_flag = 1;	// Switch to deceleration mode
+1864  043d 35010015      	mov	_pulse_flag,#1
+1865  0441               L145:
+1866                     ; 724 	if ((duty_cycle_step > 0) && (pulse_flag == 1))
+1868  0441 1e01          	ldw	x,(OFST+1,sp)
+1869  0443 2709          	jreq	L345
+1871  0445 b615          	ld	a,_pulse_flag
+1872  0447 4a            	dec	a
+1873  0448 2604          	jrne	L345
+1874                     ; 726 		duty_cycle_step = decelerate_pump(duty_cycle_step);	// Decrease the duty cycle		
+1876  044a adb6          	call	_decelerate_pump
+1879  044c 2002          	jra	L545
+1880  044e               L345:
+1881                     ; 730 		pulse_flag = 0;				// Switch back to acceleration mode once the duty cycle reaches zero
+1883  044e 3f15          	clr	_pulse_flag
+1884  0450               L545:
+1885                     ; 732 	return duty_cycle_step;	// Return the updated duty cycle value
+1889  0450 5b02          	addw	sp,#2
+1890  0452 81            	ret	
+2107                     	xdef	_main
+2108                     	xdef	_current_state
+2109                     	xdef	_pump_off
+2110                     	xdef	_decelerate_pump
+2111                     	xdef	_accelerate_pump
+2112                     	xdef	_set_pump_speed
+2113                     	xdef	_pump_smooth_on_off
+2114                     	xdef	_tim1_init
+2115                     	xdef	_tim2_init
+2116                     	xdef	_set_pwm_frequency
+2117                     	xdef	_delay_ms
+2118                     	xdef	_tim4_init
+2119                     	xdef	_EXTI_setup
+2120                     	xdef	_gpio_setup
+2121                     	xdef	_clock_setup
+2122                     	xdef	_last_interrupt_time
+2123                     	xdef	_pulse_flag
+2124                     	xdef	_duty_cycle_step
+2125                     	xdef	_button_press_duration
+2126                     	xdef	_button_press_start
+2127                     	xdef	_button_pressed
+2128                     	xdef	_long_press
+2129                     	xdef	_press_count
+2130                     	xdef	_max_pwm_speed_LED
+2131                     	xdef	_max_pwm_speed_pump
+2132                     	xdef	_arr_tim2
+2133                     	xdef	_arr_tim1
+2134                     	xdef	_OCR
+2135                     	xref	_pow
+2136                     	xdef	f_TIM4_UPD_OVF_IRQHandler
+2137                     	xdef	f_EXTI_PORTD_IRQHandler
+2138                     	xdef	_ms_count
+2139                     	xref	_TIM4_ClearITPendingBit
+2140                     	xref	_TIM4_ITConfig
+2141                     	xref	_TIM4_Cmd
+2142                     	xref	_TIM4_TimeBaseInit
+2143                     	xref	_TIM4_DeInit
+2144                     	xref	_TIM2_SetCompare3
+2145                     	xref	_TIM2_SetCompare2
+2146                     	xref	_TIM2_Cmd
+2147                     	xref	_TIM2_OC3Init
+2148                     	xref	_TIM2_OC2Init
+2149                     	xref	_TIM2_TimeBaseInit
+2150                     	xref	_TIM2_DeInit
+2151                     	xref	_TIM1_SetCompare3
+2152                     	xref	_TIM1_CtrlPWMOutputs
+2153                     	xref	_TIM1_Cmd
+2154                     	xref	_TIM1_OC3Init
+2155                     	xref	_TIM1_TimeBaseInit
+2156                     	xref	_TIM1_DeInit
+2157                     	xref	_ITC_SetSoftwarePriority
+2158                     	xref	_ITC_DeInit
+2159                     	xref	_GPIO_ReadInputPin
+2160                     	xref	_GPIO_Init
+2161                     	xref	_GPIO_DeInit
+2162                     	xref	_EXTI_SetTLISensitivity
+2163                     	xref	_EXTI_SetExtIntSensitivity
+2164                     	xref	_EXTI_DeInit
+2165                     	xref	_CLK_GetFlagStatus
+2166                     	xref	_CLK_SYSCLKConfig
+2167                     	xref	_CLK_HSIPrescalerConfig
+2168                     	xref	_CLK_ClockSwitchConfig
+2169                     	xref	_CLK_PeripheralClockConfig
+2170                     	xref	_CLK_ClockSwitchCmd
+2171                     	xref	_CLK_LSICmd
+2172                     	xref	_CLK_HSICmd
+2173                     	xref	_CLK_HSECmd
+2174                     	xref	_CLK_DeInit
+2175                     	switch	.const
+2176  0004               L343:
+2177  0004 3f800000      	dc.w	16256,0
+2178  0008               L333:
+2179  0008 40000000      	dc.w	16384,0
+2180                     	xref.b	c_lreg
+2181                     	xref.b	c_x
+2182                     	xref.b	c_y
+2202                     	xref	c_lsbc
+2203                     	xref	c_ldiv
+2204                     	xref	c_uitolx
+2205                     	xref	c_imul
+2206                     	xref	c_lcmp
+2207                     	xref	c_ltor
+2208                     	xref	c_ftol
+2209                     	xref	c_fsub
+2210                     	xref	c_fdiv
+2211                     	xref	c_fmul
+2212                     	xref	c_rtol
+2213                     	xref	c_itof
+2214                     	xref	c_uitof
+2215                     	xref	c_bmulx
+2216                     	xref	c_ltof
+2217                     	end
